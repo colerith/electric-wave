@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, Link } from 'react-router-dom';
-import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown } from 'lucide-react';
+import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Post, INITIAL_POSTS, INITIAL_LINKS, FriendlyLink, EditorState, ViewMode, Announcement, INITIAL_ANNOUNCEMENTS, DEFAULT_CATEGORIES } from './types';
+import { Post, INITIAL_POSTS, INITIAL_LINKS, FriendlyLink, EditorState, ViewMode, Announcement, INITIAL_ANNOUNCEMENTS, DEFAULT_CATEGORIES, SiteConfig, DEFAULT_SITE_CONFIG } from './types';
 import { GalleryCard } from './components/GalleryCard';
 import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
@@ -75,12 +75,12 @@ const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (key
   );
 };
 
-const Header: React.FC<{ isAdmin: boolean; onLoginClick: () => void; onLogout: () => void; onNewPost: () => void; searchQuery: string; setSearchQuery: (q: string) => void; avatarUrl: string; }> = ({ isAdmin, onLoginClick, onLogout, onNewPost, searchQuery, setSearchQuery, avatarUrl }) => {
+const Header: React.FC<{ isAdmin: boolean; onLoginClick: () => void; onLogout: () => void; onNewPost: () => void; searchQuery: string; setSearchQuery: (q: string) => void; siteConfig: SiteConfig; }> = ({ isAdmin, onLoginClick, onLogout, onNewPost, searchQuery, setSearchQuery, siteConfig }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 h-20">
       <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between gap-8">
         <Link to="/" className="group flex flex-col justify-center">
-          <h1 className="text-2xl font-serif font-black text-zine-blue">电波FM<span className="text-zine-pink">.</span></h1>
+          <h1 className="text-2xl font-serif font-black text-zine-blue">{siteConfig.siteName}<span className="text-zine-pink">.</span></h1>
           <span className="text-[10px] uppercase tracking-[0.3em] text-gray-400 group-hover:text-zine-blue transition-colors">Electric Wave</span>
         </Link>
         <div className="flex-1 max-w-sm relative hidden sm:block">
@@ -94,7 +94,7 @@ const Header: React.FC<{ isAdmin: boolean; onLoginClick: () => void; onLogout: (
           <div className="h-6 w-px bg-gray-200"></div>
           {isAdmin ? (
             <div className="flex items-center gap-4">
-              <Link to="/dashboard" className="w-9 h-9 rounded-full overflow-hidden border-2 border-zine-pink"><img src={avatarUrl} className="w-full h-full object-cover" alt="admin" /></Link>
+              <Link to="/dashboard" className="w-9 h-9 rounded-full overflow-hidden border-2 border-zine-pink"><img src={siteConfig.avatarUrl} className="w-full h-full object-cover" alt="admin" /></Link>
               <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors"><LogOut size={18} /></button>
               <Button onClick={onNewPost} variant="primary" icon={<Plus size={16} />} className="!py-1.5 !px-4 !text-xs !rounded-full">发布</Button>
             </div>
@@ -107,7 +107,15 @@ const Header: React.FC<{ isAdmin: boolean; onLoginClick: () => void; onLogout: (
   );
 };
 
-const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: number }> = ({ links, isAdmin }) => {
+const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: number; siteConfig: SiteConfig }> = ({ links, isAdmin, siteConfig }) => {
+    // Dynamic running days calculation
+    const daysRunning = useMemo(() => {
+        const start = new Date(siteConfig.startDate).getTime();
+        const now = Date.now();
+        const diff = now - start;
+        return Math.floor(diff / (1000 * 60 * 60 * 24));
+    }, [siteConfig.startDate]);
+
     return (
         <footer className="bg-white border-t border-gray-100 py-12 mt-auto">
             <div className="max-w-7xl mx-auto px-6">
@@ -128,7 +136,10 @@ const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: 
                                     总浏览量: <span id="busuanzi_value_site_pv" className="font-bold text-zine-blue">--</span>
                                  </span>
                              </div>
-                             <div>运行天数: <span>{Math.floor((Date.now() - 1704067200000) / (1000 * 60 * 60 * 24))} 天</span></div>
+                             <div className="flex items-center gap-2">
+                                 <Calendar size={14} className="text-zine-pink" />
+                                 运行天数: <span className="font-bold text-zine-blue">{daysRunning > 0 ? daysRunning : 0} 天</span>
+                             </div>
                         </div>
                     </div>
                     <div>
@@ -145,7 +156,7 @@ const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: 
                     <div className="md:text-right">
                         <h4 className="font-serif font-bold text-zine-blue mb-4">Electric Wave.</h4>
                         <p className="text-xs text-gray-400 leading-relaxed max-w-xs ml-auto">
-                            © {new Date().getFullYear()} Colerith. <br/>
+                            © {new Date().getFullYear()} {siteConfig.siteName}. <br/>
                             Built with React & Gemini AI. <br/>
                             Designed for SillyTavern Community.
                         </p>
@@ -194,15 +205,16 @@ const Dashboard: React.FC<{
     categories: string[]; 
     announcements: Announcement[]; 
     links: FriendlyLink[];
+    siteConfig: SiteConfig;
     onUpdatePosts: (posts: Post[]) => void; 
     onUpdateCategories: (cats: string[]) => void; 
     onUpdateAnnouncements: (anns: Announcement[]) => void; 
     onUpdateLinks: (links: FriendlyLink[]) => void;
+    onUpdateSiteConfig: (config: SiteConfig) => void;
     onEditPost: (p: Post) => void; 
     onDeletePost: (id: string) => void; 
-    avatarUrl: string; 
-}> = ({ posts, categories, announcements, links, onUpdatePosts, onUpdateCategories, onUpdateAnnouncements, onUpdateLinks, onEditPost, onDeletePost, avatarUrl }) => {
-    const [activeTab, setActiveTab] = useState<'posts' | 'announcements' | 'categories' | 'links'>('posts');
+}> = ({ posts, categories, announcements, links, siteConfig, onUpdatePosts, onUpdateCategories, onUpdateAnnouncements, onUpdateLinks, onUpdateSiteConfig, onEditPost, onDeletePost }) => {
+    const [activeTab, setActiveTab] = useState<'posts' | 'announcements' | 'categories' | 'links' | 'settings'>('posts');
     const [newCategory, setNewCategory] = useState('');
     const [newLink, setNewLink] = useState({ title: '', url: '' });
     const [newAnnouncement, setNewAnnouncement] = useState('');
@@ -227,6 +239,7 @@ const Dashboard: React.FC<{
                     <button onClick={() => setActiveTab('announcements')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'announcements' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>公告管理</button>
                     <button onClick={() => setActiveTab('categories')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'categories' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>分区设置</button>
                     <button onClick={() => setActiveTab('links')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'links' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>友链设置</button>
+                    <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'settings' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>全局设置</button>
                 </div>
                 <div className="flex-1 overflow-x-auto">
                     {/* Posts Management */}
@@ -327,6 +340,46 @@ const Dashboard: React.FC<{
                             </div>
                         </div>
                     )}
+
+                    {/* Global Settings */}
+                    {activeTab === 'settings' && (
+                        <div className="space-y-6 max-w-2xl animate-in fade-in duration-300">
+                            <div className="bg-gray-50 p-8 rounded-xl border border-gray-100 space-y-8">
+                                <div>
+                                    <label className="block text-sm font-bold text-zine-blue mb-2 uppercase tracking-wider">站点名称</label>
+                                    <input 
+                                        value={siteConfig.siteName} 
+                                        onChange={e => onUpdateSiteConfig({...siteConfig, siteName: e.target.value})} 
+                                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-base font-serif text-zine-blue shadow-sm" 
+                                        placeholder="输入站点名称..."
+                                    />
+                                    <p className="mt-2 text-xs text-gray-400">显示在标题栏和页脚的品牌名称。</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-zine-blue mb-2 uppercase tracking-wider">头像链接 (URL)</label>
+                                    <div className="flex gap-4">
+                                        <img src={siteConfig.avatarUrl} alt="Preview" className="w-12 h-12 rounded-full border border-gray-200 object-cover" />
+                                        <input 
+                                            value={siteConfig.avatarUrl} 
+                                            onChange={e => onUpdateSiteConfig({...siteConfig, avatarUrl: e.target.value})} 
+                                            className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 shadow-sm" 
+                                            placeholder="https://..."
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-zine-blue mb-2 uppercase tracking-wider">建站日期</label>
+                                    <input 
+                                        type="date"
+                                        value={siteConfig.startDate} 
+                                        onChange={e => onUpdateSiteConfig({...siteConfig, startDate: e.target.value})} 
+                                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 shadow-sm" 
+                                    />
+                                    <p className="mt-2 text-xs text-gray-400">用于计算页脚显示的“运行天数”。</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -413,7 +466,7 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
   );
 };
 
-const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean; onEdit: (p: Post) => void; onDelete: (id: string) => void; visitorCount: number; hitokoto: { text: string; from: string } | null; announcements: Announcement[]; }> = ({ posts, categories, isAdmin, onEdit, onDelete, visitorCount, hitokoto, announcements }) => {
+const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean; onEdit: (p: Post) => void; onDelete: (id: string) => void; visitorCount: number; hitokoto: { text: string; from: string } | null; announcements: Announcement[]; siteConfig: SiteConfig; }> = ({ posts, categories, isAdmin, onEdit, onDelete, visitorCount, hitokoto, announcements, siteConfig }) => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
@@ -497,13 +550,13 @@ const App: React.FC = () => {
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [announcements, setAnnouncements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
   const [links, setLinks] = useState<FriendlyLink[]>(INITIAL_LINKS);
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('admin_logged_in') === 'true');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
   const [searchQuery, setSearchQuery] = useState('');
   const [hitokoto, setHitokoto] = useState<{ text: string; from: string } | null>(null);
   const [visitorCount, setVisitorCount] = useState(0); // Kept for type compatibility but not used for display
-  const avatarUrl = 'https://github.com/Colerith.png';
 
   const allUsedTags = useMemo(() => {
     const tags = new Set<string>();
@@ -550,13 +603,13 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="min-h-screen bg-white text-gray-800 flex flex-col">
-        <Header isAdmin={isAdmin} onLoginClick={() => setIsLoginModalOpen(true)} onLogout={() => { setIsAdmin(false); localStorage.removeItem('admin_logged_in'); }} onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })} searchQuery={searchQuery} setSearchQuery={setSearchQuery} avatarUrl={avatarUrl} />
+        <Header isAdmin={isAdmin} onLoginClick={() => setIsLoginModalOpen(true)} onLogout={() => { setIsAdmin(false); localStorage.removeItem('admin_logged_in'); }} onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })} searchQuery={searchQuery} setSearchQuery={setSearchQuery} siteConfig={siteConfig} />
         <Routes>
-          <Route path="/" element={<HomePage posts={filteredPosts} categories={categories} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDelete={id => setPosts(posts.filter(p => p.id !== id))} visitorCount={visitorCount} hitokoto={hitokoto} announcements={announcements} />} />
+          <Route path="/" element={<HomePage posts={filteredPosts} categories={categories} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDelete={id => setPosts(posts.filter(p => p.id !== id))} visitorCount={visitorCount} hitokoto={hitokoto} announcements={announcements} siteConfig={siteConfig} />} />
           <Route path="/post/:id" element={<PostDetail posts={posts} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} />} />
-          <Route path="/dashboard" element={isAdmin ? <Dashboard posts={posts} categories={categories} announcements={announcements} links={links} onUpdatePosts={setPosts} onUpdateCategories={setCategories} onUpdateAnnouncements={setAnnouncements} onUpdateLinks={setLinks} onEditPost={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDeletePost={id => setPosts(posts.filter(p => p.id !== id))} avatarUrl={avatarUrl} /> : <div className="p-20 text-center">无权访问</div>} />
+          <Route path="/dashboard" element={isAdmin ? <Dashboard posts={posts} categories={categories} announcements={announcements} links={links} siteConfig={siteConfig} onUpdatePosts={setPosts} onUpdateCategories={setCategories} onUpdateAnnouncements={setAnnouncements} onUpdateLinks={setLinks} onUpdateSiteConfig={setSiteConfig} onEditPost={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDeletePost={id => setPosts(posts.filter(p => p.id !== id))} /> : <div className="p-20 text-center">无权访问</div>} />
         </Routes>
-        <Footer links={links} isAdmin={isAdmin} visitorCount={visitorCount} />
+        <Footer links={links} isAdmin={isAdmin} visitorCount={visitorCount} siteConfig={siteConfig} />
         <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} onLogin={handleLogin} />
         <EditorModal isOpen={editor.isOpen} mode={editor.mode} initialData={editor.currentPost} categories={categories} allTags={allUsedTags} onClose={() => setEditor({ ...editor, isOpen: false })} onSave={handleSavePost} />
         <ScrollToTop />
