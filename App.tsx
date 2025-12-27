@@ -9,6 +9,17 @@ import { GalleryCard } from './components/GalleryCard';
 import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
 
+// --- Security Helper ---
+const ADMIN_HASH = "14620c325c044b76c8c084605e54d89069d72115162a5b678f2e293a3889021e";
+
+async function digestMessage(message: string) {
+  const msgUint8 = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
 // --- Shared Components ---
 
 const ScrollToTop = () => {
@@ -28,6 +39,17 @@ const ScrollToTop = () => {
 
 const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (key: string) => void }> = ({ isOpen, onClose, onLogin }) => {
   const [key, setKey] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!key) return;
+    setIsLoading(true);
+    // Small delay to prevent timing attacks and show UI feedback
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await onLogin(key);
+    setIsLoading(false);
+  };
+
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
@@ -35,8 +57,17 @@ const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (key
         <div className="w-16 h-16 bg-zine-blue text-white rounded-full flex items-center justify-center mb-6 shadow-lg"><Github size={32} /></div>
         <h2 className="text-xl font-serif font-bold text-zine-blue mb-2">管理权认证</h2>
         <div className="w-full space-y-4">
-          <input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="输入管理密钥..." className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none text-center" onKeyDown={(e) => e.key === 'Enter' && onLogin(key)} />
-          <Button onClick={() => onLogin(key)} className="w-full !py-3 !rounded-xl">授权登录</Button>
+          <input 
+            type="password" 
+            value={key} 
+            onChange={(e) => setKey(e.target.value)} 
+            placeholder="输入管理密钥..." 
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none text-center" 
+            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} 
+          />
+          <Button onClick={handleSubmit} className="w-full !py-3 !rounded-xl" disabled={isLoading}>
+            {isLoading ? '验证中...' : '授权登录'}
+          </Button>
           <button onClick={onClose} className="w-full text-xs text-gray-400 py-2">取消访问</button>
         </div>
       </div>
@@ -497,12 +528,20 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleLogin = (key: string) => {
-    if (key === 'fishy0517home') {
-      setIsAdmin(true);
-      localStorage.setItem('admin_logged_in', 'true');
-      setIsLoginModalOpen(false);
-    } else alert("密钥错误");
+  const handleLogin = async (key: string) => {
+    try {
+      const hash = await digestMessage(key);
+      if (hash === ADMIN_HASH) {
+        setIsAdmin(true);
+        localStorage.setItem('admin_logged_in', 'true');
+        setIsLoginModalOpen(false);
+      } else {
+        alert("密钥错误");
+      }
+    } catch (e) {
+      console.error("Login Error:", e);
+      alert("验证出错，请重试");
+    }
   };
 
   const handleSavePost = (post: Post) => {
