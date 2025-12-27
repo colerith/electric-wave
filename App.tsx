@@ -276,7 +276,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogin = (key: string) => {
-    if (key === 'admin' || key === 'sillytavern') {
+    if (key === 'fishy0517home') {
       setIsAdmin(true);
       localStorage.setItem('admin_logged_in', 'true');
       setIsLoginModalOpen(false);
