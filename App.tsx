@@ -107,7 +107,7 @@ const Header: React.FC<{ isAdmin: boolean; onLoginClick: () => void; onLogout: (
   );
 };
 
-const Footer: React.FC<{ links: FriendlyLink[]; visitorCount: number; isAdmin: boolean }> = ({ links, visitorCount, isAdmin }) => {
+const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean }> = ({ links, isAdmin }) => {
     return (
         <footer className="bg-white border-t border-gray-100 py-12 mt-auto">
             <div className="max-w-7xl mx-auto px-6">
@@ -117,7 +117,16 @@ const Footer: React.FC<{ links: FriendlyLink[]; visitorCount: number; isAdmin: b
                         <div className="space-y-2 text-sm text-gray-500 font-serif">
                              <div className="flex items-center gap-2">
                                 <BarChart3 size={14} className="text-zine-pink" />
-                                <span>总访客数: <span className="font-bold text-zine-blue">{visitorCount.toLocaleString()}</span></span>
+                                {/* Busuanzi Unique Visitor Counter */}
+                                <span id="busuanzi_container_site_uv" style={{ display: 'none' }}>
+                                    访客数: <span id="busuanzi_value_site_uv" className="font-bold text-zine-blue">--</span>
+                                </span>
+                             </div>
+                             <div>
+                                 {/* Busuanzi Page View Counter */}
+                                 <span id="busuanzi_container_site_pv" style={{ display: 'none' }}>
+                                    总浏览量: <span id="busuanzi_value_site_pv" className="font-bold text-zine-blue">--</span>
+                                 </span>
                              </div>
                              <div>运行天数: <span>{Math.floor((Date.now() - 1704067200000) / (1000 * 60 * 60 * 24))} 天</span></div>
                         </div>
@@ -493,7 +502,7 @@ const App: React.FC = () => {
   const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
   const [searchQuery, setSearchQuery] = useState('');
   const [hitokoto, setHitokoto] = useState<{ text: string; from: string } | null>(null);
-  const [visitorCount, setVisitorCount] = useState(1024);
+  const [visitorCount, setVisitorCount] = useState(0); // Kept for type compatibility but not used for display
   const avatarUrl = 'https://github.com/Colerith.png';
 
   const allUsedTags = useMemo(() => {
@@ -501,19 +510,6 @@ const App: React.FC = () => {
     posts.forEach(p => p.tags.forEach(t => tags.add(t)));
     return Array.from(tags);
   }, [posts]);
-
-  // Visitor Count Simulation
-  useEffect(() => {
-      const storedCount = localStorage.getItem('visitor_count');
-      let count = storedCount ? parseInt(storedCount) : 12345;
-      // Simulate increment on new session
-      if (!sessionStorage.getItem('visited')) {
-          count += Math.floor(Math.random() * 5) + 1;
-          localStorage.setItem('visitor_count', count.toString());
-          sessionStorage.setItem('visited', 'true');
-      }
-      setVisitorCount(count);
-  }, []);
 
   useEffect(() => {
     const fetchHitokoto = async () => {
@@ -560,7 +556,7 @@ const App: React.FC = () => {
           <Route path="/post/:id" element={<PostDetail posts={posts} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} />} />
           <Route path="/dashboard" element={isAdmin ? <Dashboard posts={posts} categories={categories} announcements={announcements} links={links} onUpdatePosts={setPosts} onUpdateCategories={setCategories} onUpdateAnnouncements={setAnnouncements} onUpdateLinks={setLinks} onEditPost={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDeletePost={id => setPosts(posts.filter(p => p.id !== id))} avatarUrl={avatarUrl} /> : <div className="p-20 text-center">无权访问</div>} />
         </Routes>
-        <Footer links={links} visitorCount={visitorCount} isAdmin={isAdmin} />
+        <Footer links={links} isAdmin={isAdmin} visitorCount={visitorCount} />
         <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} onLogin={handleLogin} />
         <EditorModal isOpen={editor.isOpen} mode={editor.mode} initialData={editor.currentPost} categories={categories} allTags={allUsedTags} onClose={() => setEditor({ ...editor, isOpen: false })} onSave={handleSavePost} />
         <ScrollToTop />
