@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, Link } from 'react-router-dom';
-import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save } from 'lucide-react';
+import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Loader2, WifiOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Post, INITIAL_POSTS, INITIAL_LINKS, FriendlyLink, EditorState, ViewMode, Announcement, INITIAL_ANNOUNCEMENTS, DEFAULT_CATEGORIES, SiteConfig, DEFAULT_SITE_CONFIG } from './types';
@@ -10,18 +10,10 @@ import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
 
 // --- Security Helper ---
-// SHA-256 hash for 'fishy0517home'. 
 const ADMIN_HASH = "14620c325c044b76c8c084605e54d89069d72115162a5b678f2e293a3889021e";
 
-// Storage Keys
-const KEYS = {
-  POSTS: 'ew_posts',
-  CATEGORIES: 'ew_categories',
-  ANNOUNCEMENTS: 'ew_announcements',
-  LINKS: 'ew_links',
-  CONFIG: 'ew_site_config',
-  ADMIN: 'ew_admin_logged_in'
-};
+// Key for Admin Session (still keep session local for login state)
+const SESSION_KEY = 'ew_admin_session';
 
 async function digestMessage(message: string) {
   const msgUint8 = new TextEncoder().encode(message);
@@ -29,17 +21,6 @@ async function digestMessage(message: string) {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   return hashHex;
-}
-
-// Helper to load from storage or fallback to default
-function loadState<T>(key: string, fallback: T): T {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : fallback;
-  } catch (e) {
-    console.warn(`Failed to load ${key} from storage`, e);
-    return fallback;
-  }
 }
 
 // --- Shared Components ---
@@ -179,8 +160,7 @@ const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: 
                         <h4 className="font-serif font-bold text-zine-blue mb-4">Electric Wave.</h4>
                         <p className="text-xs text-gray-400 leading-relaxed max-w-xs ml-auto">
                             © {new Date().getFullYear()} {siteConfig.siteName}. <br/>
-                            Built with React & Gemini AI. <br/>
-                            Designed for SillyTavern Community.
+                            Power by VPS & React & Gemini AI.
                         </p>
                     </div>
                 </div>
@@ -220,7 +200,7 @@ const AnnouncementGallery: React.FC<{ announcements: Announcement[] }> = ({ anno
     );
 };
 
-// --- Dashboard Component (Enhanced) ---
+// --- Dashboard Component ---
 
 const Dashboard: React.FC<{ 
     posts: Post[]; 
@@ -228,6 +208,8 @@ const Dashboard: React.FC<{
     announcements: Announcement[]; 
     links: FriendlyLink[];
     siteConfig: SiteConfig;
+    isSaving: boolean;
+    onSaveAll: (data: any) => void;
     onUpdatePosts: (posts: Post[]) => void; 
     onUpdateCategories: (cats: string[]) => void; 
     onUpdateAnnouncements: (anns: Announcement[]) => void; 
@@ -235,31 +217,15 @@ const Dashboard: React.FC<{
     onUpdateSiteConfig: (config: SiteConfig) => void;
     onEditPost: (p: Post) => void; 
     onDeletePost: (id: string) => void; 
-}> = ({ posts, categories, announcements, links, siteConfig, onUpdatePosts, onUpdateCategories, onUpdateAnnouncements, onUpdateLinks, onUpdateSiteConfig, onEditPost, onDeletePost }) => {
+}> = ({ posts, categories, announcements, links, siteConfig, isSaving, onSaveAll, onUpdatePosts, onUpdateCategories, onUpdateAnnouncements, onUpdateLinks, onUpdateSiteConfig, onEditPost, onDeletePost }) => {
     const [activeTab, setActiveTab] = useState<'posts' | 'announcements' | 'categories' | 'links' | 'settings'>('posts');
     const [newCategory, setNewCategory] = useState('');
     const [newLink, setNewLink] = useState({ title: '', url: '' });
     const [newAnnouncement, setNewAnnouncement] = useState('');
 
-    const handleExportData = () => {
-        const data = {
-            posts,
-            categories,
-            announcements,
-            links,
-            siteConfig
-        };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
-
+    // Trigger save whenever critical data changes (debounced in App or manually triggered here?)
+    // For simplicity, we'll auto-save in App via useEffect, but let's provide a manual Save button as well for immediate feedback.
+    
     // Helpers for sorting
     const moveItem = <T,>(arr: T[], index: number, direction: 'up' | 'down'): T[] => {
         const newArr = [...arr];
@@ -275,7 +241,10 @@ const Dashboard: React.FC<{
         <div className="max-w-7xl mx-auto px-6 py-12">
             <div className="bg-white border border-gray-100 shadow-soft p-8 min-h-[600px] flex flex-col md:flex-row gap-8">
                 <div className="w-full md:w-64 md:border-r border-gray-100 md:pr-6 space-y-2 shrink-0">
-                    <h2 className="text-xl font-serif font-bold text-zine-blue mb-6">控制台</h2>
+                    <h2 className="text-xl font-serif font-bold text-zine-blue mb-6 flex items-center justify-between">
+                        控制台
+                        {isSaving && <Loader2 className="animate-spin text-zine-pink" size={16} />}
+                    </h2>
                     <button onClick={() => setActiveTab('posts')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'posts' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>文章管理</button>
                     <button onClick={() => setActiveTab('announcements')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'announcements' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>公告管理</button>
                     <button onClick={() => setActiveTab('categories')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'categories' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>分区设置</button>
@@ -419,12 +388,8 @@ const Dashboard: React.FC<{
                                     <p className="mt-2 text-xs text-gray-400">用于计算页脚显示的“运行天数”。</p>
                                 </div>
                                 <div className="pt-6 border-t border-gray-200">
-                                    <label className="block text-sm font-bold text-zine-blue mb-4 uppercase tracking-wider">数据维护</label>
-                                    <Button onClick={handleExportData} icon={<Download size={16} />} variant="secondary" className="w-full">
-                                        导出全站数据 (备份)
-                                    </Button>
-                                    <p className="mt-3 text-xs text-gray-400 leading-relaxed">
-                                        由于这是静态网站，你在后台的修改只会保存在当前浏览器中。若要永久修改（或在其他设备同步），请导出数据，并将 JSON 内容更新到代码仓库中。
+                                    <p className="text-xs text-green-600 leading-relaxed font-bold flex items-center gap-2">
+                                        <Save size={14} /> 更改会自动保存到服务器
                                     </p>
                                 </div>
                             </div>
@@ -516,13 +481,24 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
   );
 };
 
-const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean; onEdit: (p: Post) => void; onDelete: (id: string) => void; visitorCount: number; hitokoto: { text: string; from: string } | null; announcements: Announcement[]; siteConfig: SiteConfig; }> = ({ posts, categories, isAdmin, onEdit, onDelete, visitorCount, hitokoto, announcements, siteConfig }) => {
+const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean; onEdit: (p: Post) => void; onDelete: (id: string) => void; visitorCount: number; hitokoto: { text: string; from: string } | null; announcements: Announcement[]; siteConfig: SiteConfig; isLoading: boolean }> = ({ posts, categories, isAdmin, onEdit, onDelete, visitorCount, hitokoto, announcements, siteConfig, isLoading }) => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   const filteredPostsByCat = selectedCategory === 'All' ? posts : posts.filter(p => p.category === selectedCategory);
   const pinnedPosts = filteredPostsByCat.filter(p => p.isPinned);
   const regularPosts = filteredPostsByCat.filter(p => !p.isPinned);
+
+  if (isLoading) {
+    return (
+        <div className="flex-1 flex items-center justify-center min-h-[500px]">
+             <div className="flex flex-col items-center gap-4 text-zine-blue/50">
+                <Loader2 size={40} className="animate-spin" />
+                <p className="font-serif italic tracking-widest text-sm">接收电波中...</p>
+             </div>
+        </div>
+    );
+  }
 
   return (
     <main className="max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1">
@@ -596,26 +572,96 @@ const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean
 };
 
 const App: React.FC = () => {
-  // Initialize state from LocalStorage or defaults
-  const [posts, setPosts] = useState<Post[]>(() => loadState(KEYS.POSTS, INITIAL_POSTS));
-  const [categories, setCategories] = useState<string[]>(() => loadState(KEYS.CATEGORIES, DEFAULT_CATEGORIES));
-  const [announcements, setAnnouncements] = useState<Announcement[]>(() => loadState(KEYS.ANNOUNCEMENTS, INITIAL_ANNOUNCEMENTS));
-  const [links, setLinks] = useState<FriendlyLink[]>(() => loadState(KEYS.LINKS, INITIAL_LINKS));
-  const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => loadState(KEYS.CONFIG, DEFAULT_SITE_CONFIG));
+  // --- State Management ---
+  // Notice we removed the "loadState" localStorage logic for data, only keeping Admin session
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [links, setLinks] = useState<FriendlyLink[]>([]);
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
   
-  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem(KEYS.ADMIN) === 'true');
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem(SESSION_KEY) === 'true');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
   const [searchQuery, setSearchQuery] = useState('');
   const [hitokoto, setHitokoto] = useState<{ text: string; from: string } | null>(null);
   const [visitorCount, setVisitorCount] = useState(0); 
+  
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [serverError, setServerError] = useState(false);
 
-  // Persistence Effects
-  useEffect(() => localStorage.setItem(KEYS.POSTS, JSON.stringify(posts)), [posts]);
-  useEffect(() => localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(categories)), [categories]);
-  useEffect(() => localStorage.setItem(KEYS.ANNOUNCEMENTS, JSON.stringify(announcements)), [announcements]);
-  useEffect(() => localStorage.setItem(KEYS.LINKS, JSON.stringify(links)), [links]);
-  useEffect(() => localStorage.setItem(KEYS.CONFIG, JSON.stringify(siteConfig)), [siteConfig]);
+  // --- API Interaction ---
+  
+  // 1. Load Data from Server on Mount
+  useEffect(() => {
+    const fetchData = async () => {
+        try {
+            const res = await fetch('/api/data');
+            if (!res.ok) throw new Error("Server error");
+            const data = await res.json();
+            
+            // Populate state
+            if(data.posts) setPosts(data.posts);
+            if(data.categories) setCategories(data.categories);
+            if(data.announcements) setAnnouncements(data.announcements);
+            if(data.links) setLinks(data.links);
+            if(data.siteConfig) setSiteConfig(data.siteConfig);
+            
+            setServerError(false);
+        } catch (e) {
+            console.error("Failed to fetch data:", e);
+            setServerError(true);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    fetchData();
+  }, []);
+
+  // 2. Save Data to Server
+  // We debounce or save on specific actions. 
+  // For this architecture, we will create a function that saves the Current State + The Update
+  // However, React state updates are async. 
+  // Reliable way: Update local state -> Trigger Effect -> Save to Server?
+  // Or: Create a master Save function that takes the new object.
+  
+  const saveDataToServer = async (newData: any) => {
+      setIsSaving(true);
+      try {
+          // Construct the full payload based on what's passed or current state
+          // Note: This is a bit naive for high concurrency but fine for single admin.
+          const payload = {
+              posts: newData.posts !== undefined ? newData.posts : posts,
+              categories: newData.categories !== undefined ? newData.categories : categories,
+              announcements: newData.announcements !== undefined ? newData.announcements : announcements,
+              links: newData.links !== undefined ? newData.links : links,
+              siteConfig: newData.siteConfig !== undefined ? newData.siteConfig : siteConfig,
+          };
+          
+          const res = await fetch('/api/save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ data: payload })
+          });
+          
+          if (!res.ok) throw new Error("Save failed");
+      } catch (e) {
+          console.error("Save error:", e);
+          alert("保存失败，请检查服务器连接");
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  // Wrapper update functions to update Local State AND Server
+  const updatePosts = (newPosts: Post[]) => { setPosts(newPosts); saveDataToServer({ posts: newPosts }); };
+  const updateCategories = (newCats: string[]) => { setCategories(newCats); saveDataToServer({ categories: newCats }); };
+  const updateAnnouncements = (newAnns: Announcement[]) => { setAnnouncements(newAnns); saveDataToServer({ announcements: newAnns }); };
+  const updateLinks = (newLinks: FriendlyLink[]) => { setLinks(newLinks); saveDataToServer({ links: newLinks }); };
+  const updateSiteConfig = (newConfig: SiteConfig) => { setSiteConfig(newConfig); saveDataToServer({ siteConfig: newConfig }); };
+
+  // --- Helpers ---
 
   const allUsedTags = useMemo(() => {
     const tags = new Set<string>();
@@ -641,7 +687,7 @@ const App: React.FC = () => {
       const hash = await digestMessage(key);
       if (hash === ADMIN_HASH) {
         setIsAdmin(true);
-        localStorage.setItem(KEYS.ADMIN, 'true');
+        localStorage.setItem(SESSION_KEY, 'true');
         setIsLoginModalOpen(false);
       } else {
         alert("密钥错误");
@@ -653,20 +699,37 @@ const App: React.FC = () => {
   };
 
   const handleSavePost = (post: Post) => {
-    if (editor.mode === 'create') setPosts([post, ...posts]);
-    else setPosts(posts.map(p => p.id === post.id ? post : p));
+    let newPosts;
+    if (editor.mode === 'create') {
+        newPosts = [post, ...posts];
+    } else {
+        newPosts = posts.map(p => p.id === post.id ? post : p);
+    }
+    updatePosts(newPosts); // Trigger server save
   };
 
   const filteredPosts = posts.filter(post => post.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
+  // Error State UI
+  if (serverError) {
+      return (
+          <div className="min-h-screen bg-zine-paper flex flex-col items-center justify-center p-8 text-center text-zine-blue">
+              <WifiOff size={64} className="mb-4 opacity-50"/>
+              <h1 className="text-2xl font-serif font-bold mb-2">无法连接到电波塔</h1>
+              <p className="text-gray-500 mb-6">Failed to connect to the server API.</p>
+              <Button onClick={() => window.location.reload()}>重试连接</Button>
+          </div>
+      );
+  }
+
   return (
     <HashRouter>
       <div className="min-h-screen bg-white text-gray-800 flex flex-col">
-        <Header isAdmin={isAdmin} onLoginClick={() => setIsLoginModalOpen(true)} onLogout={() => { setIsAdmin(false); localStorage.removeItem(KEYS.ADMIN); }} onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })} searchQuery={searchQuery} setSearchQuery={setSearchQuery} siteConfig={siteConfig} />
+        <Header isAdmin={isAdmin} onLoginClick={() => setIsLoginModalOpen(true)} onLogout={() => { setIsAdmin(false); localStorage.removeItem(SESSION_KEY); }} onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })} searchQuery={searchQuery} setSearchQuery={setSearchQuery} siteConfig={siteConfig} />
         <Routes>
-          <Route path="/" element={<HomePage posts={filteredPosts} categories={categories} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDelete={id => setPosts(posts.filter(p => p.id !== id))} visitorCount={visitorCount} hitokoto={hitokoto} announcements={announcements} siteConfig={siteConfig} />} />
+          <Route path="/" element={<HomePage posts={filteredPosts} categories={categories} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDelete={id => updatePosts(posts.filter(p => p.id !== id))} visitorCount={visitorCount} hitokoto={hitokoto} announcements={announcements} siteConfig={siteConfig} isLoading={isLoading} />} />
           <Route path="/post/:id" element={<PostDetail posts={posts} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} />} />
-          <Route path="/dashboard" element={isAdmin ? <Dashboard posts={posts} categories={categories} announcements={announcements} links={links} siteConfig={siteConfig} onUpdatePosts={setPosts} onUpdateCategories={setCategories} onUpdateAnnouncements={setAnnouncements} onUpdateLinks={setLinks} onUpdateSiteConfig={setSiteConfig} onEditPost={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDeletePost={id => setPosts(posts.filter(p => p.id !== id))} /> : <div className="p-20 text-center">无权访问</div>} />
+          <Route path="/dashboard" element={isAdmin ? <Dashboard posts={posts} categories={categories} announcements={announcements} links={links} siteConfig={siteConfig} isSaving={isSaving} onSaveAll={saveDataToServer} onUpdatePosts={updatePosts} onUpdateCategories={updateCategories} onUpdateAnnouncements={updateAnnouncements} onUpdateLinks={updateLinks} onUpdateSiteConfig={updateSiteConfig} onEditPost={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDeletePost={id => updatePosts(posts.filter(p => p.id !== id))} /> : <div className="p-20 text-center">无权访问</div>} />
         </Routes>
         <Footer links={links} isAdmin={isAdmin} visitorCount={visitorCount} siteConfig={siteConfig} />
         <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} onLogin={handleLogin} />
