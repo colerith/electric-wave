@@ -10,6 +10,7 @@ import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
 
 // --- Security Helper ---
+// SHA-256 hash for 'fishy0517home'. 
 const ADMIN_HASH = "14620c325c044b76c8c084605e54d89069d72115162a5b678f2e293a3889021e";
 
 // Storage Keys
@@ -323,7 +324,7 @@ const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: 
                         </div>
                     </div>
                     <div className="md:text-right">
-                        <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4">Electric Wave.</h4>
+                        <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4">电波FM.</h4>
                         <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed max-w-xs ml-auto">
                             {/* 修改页脚版权文字区域 */}
                            © {new Date().getFullYear()} 电波系. <br/>
@@ -670,23 +671,32 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
 
   // Re-write TOC to match the ID strategy above (pure text slug)
   const SimpleTableOfContents: React.FC<{ content: string }> = ({ content }) => {
-     const headings = content.match(/^(#{1,3})\s+(.*)$/gm);
+     // Updated regex to catch up to h4
+     const headings = content.match(/^(#{1,4})\s+(.*)$/gm);
      if (!headings || headings.length === 0) return null;
      
      return (
         <div className="hidden lg:block w-64 shrink-0">
           <div className="sticky top-32">
             <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4 text-sm uppercase tracking-widest">目录</h4>
-            <ul className="space-y-3 relative border-l border-gray-200 dark:border-gray-700 ml-1">
+            <ul className="space-y-2 relative border-l-2 border-gray-100 dark:border-gray-800 ml-1 py-2">
               {headings.map((heading, index) => {
+                const level = heading.match(/^#+/)?.[0].length || 1;
                 const text = heading.replace(/^#+\s+/, '');
                 const id = slugify(text);
+                
+                // Visual hierarchy based on level
+                const fontSize = level === 1 ? 'text-sm font-bold' : level === 2 ? 'text-sm' : 'text-xs';
+                const color = level === 1 ? 'text-zine-blue dark:text-gray-200' : 'text-gray-500 dark:text-gray-400';
+                // Indentation logic (rem)
+                const paddingLeft = `${(level - 1) * 1}rem`;
+                
                 return (
-                  <li key={index} className="relative pl-3">
+                  <li key={index} className="relative group transition-all" style={{ paddingLeft }}>
                     <button onClick={() => {
                         const el = document.getElementById(id);
                         if(el) { const y = el.getBoundingClientRect().top + window.scrollY - 100; window.scrollTo({top:y, behavior:'smooth'}); }
-                    }} className="block text-left text-sm text-gray-500 dark:text-gray-400 hover:text-zine-pink transition-colors font-serif leading-tight">
+                    }} className={`block text-left ${fontSize} ${color} hover:text-zine-pink dark:hover:text-zine-pink transition-colors font-serif leading-tight py-1 border-l-2 border-transparent hover:border-zine-pink -ml-[2px] pl-3`}>
                         {text}
                     </button>
                   </li>
@@ -757,138 +767,148 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
   );
 };
 
-const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean; onEdit: (p: Post) => void; onDelete: (id: string) => void; visitorCount: number; hitokoto: { text: string; from: string } | null; announcements: Announcement[]; siteConfig: SiteConfig; }> = ({ posts, categories, isAdmin, onEdit, onDelete, visitorCount, hitokoto, announcements, siteConfig }) => {
-  const navigate = useNavigate();
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+const HomeWithNavigation: React.FC<{
+  posts: Post[];
+  categories: string[];
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  isAdmin: boolean;
+  handleEditPost: (p: Post) => void;
+  handleDeletePost: (id: string) => void;
+  siteConfig: SiteConfig;
+  announcements: Announcement[];
+  hitokoto: { text: string; from: string } | null;
+}> = ({ posts, categories, searchQuery, setSearchQuery, isAdmin, handleEditPost, handleDeletePost, siteConfig, announcements, hitokoto }) => {
+    const navigate = useNavigate();
 
-  const filteredPostsByCat = selectedCategory === 'All' ? posts : posts.filter(p => p.category === selectedCategory);
-  const pinnedPosts = filteredPostsByCat.filter(p => p.isPinned);
-  const regularPosts = filteredPostsByCat.filter(p => !p.isPinned);
+    // Separate pinned and regular from the passed 'posts' (which are already filtered by search/category in App component)
+    const pinnedPosts = posts.filter(p => p.isPinned);
+    const regularPosts = posts.filter(p => !p.isPinned);
 
-  return (
-    <main className="max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1 relative z-10">
-        <section className="mb-24 flex flex-col md:flex-row items-start md:items-end justify-between border-b border-zine-blue/10 dark:border-gray-700 pb-16 relative min-h-[400px]">
-            
-            {/* Full Width ECG Visualizer Container - Positioned higher to clear text */}
-            {/* 调整 opacity-30 来修改整体透明度 */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-screen h-[250px] -z-10 overflow-hidden pointer-events-none opacity-30">
-                <ECGVisualizer />
-            </div>
+    return (
+        <main className="max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1 relative z-10">
+            <section className="mb-24 flex flex-col md:flex-row items-start md:items-end justify-between border-b border-zine-blue/10 dark:border-gray-700 pb-16 relative min-h-[400px]">
+                
+                {/* Full Width ECG Visualizer Container */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-screen h-[250px] -z-10 overflow-hidden pointer-events-none opacity-30">
+                    <ECGVisualizer />
+                </div>
 
-            <div className="max-w-4xl flex-1 relative z-10 self-end">
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zine-blue/5 dark:bg-blue-900/20 text-zine-blue dark:text-blue-300 text-xs font-bold mb-8 border border-zine-blue/10 dark:border-blue-900/30">今日电波</span>
-                {/* Removed animate-pulse, kept gradient text */}
-                <h2 className="text-xl md:text-3xl font-serif font-black text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue dark:from-white dark:via-blue-300 dark:to-white py-3">“{hitokoto ? hitokoto.text : '正在接收电波...'}”</h2>
-                <p className="text-lg text-gray-500 dark:text-gray-400 font-serif italic">—— {hitokoto ? hitokoto.from : '...'}</p>
-            </div>
-            <div className="text-right shrink-0 hidden md:block self-end">
-                <div className="text-6xl font-serif font-light text-zine-blue/20 dark:text-white/10">{posts.length}</div>
-                <div className="text-xs text-gray-400">已收录条目</div>
-            </div>
-        </section>
-        
-        <AnnouncementGallery announcements={announcements} />
-
-        {/* Category Filter */}
-        <div className="flex flex-wrap gap-2 mb-12 sticky top-20 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md py-4 -mx-6 px-6 md:mx-0 md:px-0 md:bg-transparent md:static transition-colors">
-             <button 
-                onClick={() => setSelectedCategory('All')}
-                className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${selectedCategory === 'All' ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
-             >
-                全部
-             </button>
-             {categories.map(cat => (
-                 <button 
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${selectedCategory === cat ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
-                 >
-                    {cat}
-                 </button>
-             ))}
-        </div>
-
-        {pinnedPosts.length > 0 && (
-            <section className="mb-20 animate-in slide-in-from-bottom-4 duration-500">
-                <h3 className="text-sm font-bold text-zine-pink mb-8 uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-8 h-px bg-zine-pink"></span> 精选推荐
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                    {pinnedPosts.map(post => (
-                        <div key={post.id} onClick={() => navigate(`/post/${post.id}`)} className="group cursor-pointer">
-                            <div className={`aspect-[2/1] overflow-hidden rounded-sm mb-6 bg-gray-100 dark:bg-slate-800 shadow-sm ${!post.coverImage && 'flex items-center justify-center bg-gradient-to-br from-zine-blue/5 to-zine-pink/5'}`}>
-                                {post.coverImage ? (
-                                    <img src={post.coverImage} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" alt={post.title} />
-                                ) : (
-                                    <span className="font-serif italic text-gray-300 dark:text-gray-600 text-2xl">Electric Wave</span>
-                                )}
-                            </div>
-                            <h4 className="text-3xl font-serif font-bold text-zine-blue dark:text-white group-hover:text-zine-pink transition-colors">{post.title}</h4>
-                            <p className="text-gray-500 dark:text-gray-400 font-serif line-clamp-2 mt-2">{post.excerpt}</p>
-                        </div>
-                    ))}
+                <div className="max-w-4xl flex-1 relative z-10 self-end">
+                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zine-blue/5 dark:bg-blue-900/20 text-zine-blue dark:text-blue-300 text-xs font-bold mb-8 border border-zine-blue/10 dark:border-blue-900/30">今日电波</span>
+                    <h2 className="text-xl md:text-3xl font-serif font-black text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue dark:from-white dark:via-blue-300 dark:to-white py-3">
+                        “{hitokoto ? hitokoto.text : '正在接收电波...'}”
+                    </h2>
+                    <p className="text-lg text-gray-500 dark:text-gray-400 font-serif italic">
+                        —— {hitokoto ? hitokoto.from : '...'}
+                    </p>
+                </div>
+                <div className="text-right shrink-0 hidden md:block self-end">
+                    <div className="text-6xl font-serif font-light text-zine-blue/20 dark:text-white/10">{posts.length}</div>
+                    <div className="text-xs text-gray-400">已收录条目</div>
                 </div>
             </section>
-        )}
-        <section className="animate-in slide-in-from-bottom-8 duration-700">
-            <h3 className="text-sm font-bold text-gray-400 mb-8 uppercase tracking-widest">
-                {selectedCategory === 'All' ? '最新收录' : `${selectedCategory} 分区`}
-            </h3>
-            {regularPosts.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {regularPosts.map(post => (
-                        <GalleryCard key={post.id} post={post} isAdmin={isAdmin} onClick={() => navigate(`/post/${post.id}`)} onEdit={(e) => { e.stopPropagation(); onEdit(post); }} onDelete={(e) => { e.stopPropagation(); onDelete(post.id); }} />
-                    ))}
-                </div>
-            ) : (
-                <div className="py-20 text-center text-gray-400 font-serif italic border border-dashed border-gray-200 dark:border-gray-700 rounded-2xl">
-                    此分区暂无内容...
-                </div>
+            
+            <AnnouncementGallery announcements={announcements} />
+
+            {/* Sticky Category Filter */}
+             <div className="flex flex-wrap gap-2 mb-12 sticky top-20 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md py-4 -mx-6 px-6 md:mx-0 md:px-0 md:bg-transparent md:static transition-colors">
+                 <button 
+                    onClick={() => setSearchQuery('')}
+                    className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${!searchQuery ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
+                 >
+                    全部
+                 </button>
+                 {categories.map(cat => (
+                     <button 
+                        key={cat}
+                        onClick={() => setSearchQuery(cat)}
+                        className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${searchQuery === cat ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
+                     >
+                        {cat}
+                     </button>
+                 ))}
+            </div>
+
+            {/* Pinned Posts Section */}
+            {pinnedPosts.length > 0 && (
+                <section className="mb-20 animate-in slide-in-from-bottom-4 duration-500">
+                    <h3 className="text-sm font-bold text-zine-pink mb-8 uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-8 h-px bg-zine-pink"></span> 精选推荐
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                        {pinnedPosts.map(post => (
+                            <div key={post.id} onClick={() => navigate(`/post/${post.id}`)} className="group cursor-pointer">
+                                <div className={`aspect-[2/1] overflow-hidden rounded-sm mb-6 bg-gray-100 dark:bg-slate-800 shadow-sm ${!post.coverImage && 'flex items-center justify-center bg-gradient-to-br from-zine-blue/5 to-zine-pink/5'}`}>
+                                    {post.coverImage ? (
+                                        <img src={post.coverImage} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" alt={post.title} />
+                                    ) : (
+                                        <span className="font-serif italic text-gray-300 dark:text-gray-600 text-2xl">Electric Wave</span>
+                                    )}
+                                </div>
+                                <h4 className="text-3xl font-serif font-bold text-zine-blue dark:text-white group-hover:text-zine-pink transition-colors">{post.title}</h4>
+                                <p className="text-gray-500 dark:text-gray-400 font-serif line-clamp-2 mt-2">{post.excerpt}</p>
+                            </div>
+                        ))}
+                    </div>
+                </section>
             )}
-        </section>
-    </main>
-  );
+
+            {/* Regular Posts Grid */}
+            <section className="animate-in slide-in-from-bottom-8 duration-700">
+                <h3 className="text-sm font-bold text-gray-400 mb-8 uppercase tracking-widest">
+                    {searchQuery ? (categories.includes(searchQuery) ? `${searchQuery} 分区` : '搜索结果') : '最新收录'}
+                </h3>
+                {regularPosts.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {regularPosts.map(post => (
+                            <GalleryCard 
+                                key={post.id} 
+                                post={post} 
+                                isAdmin={isAdmin}
+                                onClick={() => navigate(`/post/${post.id}`)}
+                                onEdit={(e) => { e.stopPropagation(); handleEditPost(post); }}
+                                onDelete={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="py-20 text-center text-gray-400 font-serif italic border border-dashed border-gray-200 dark:border-gray-700 rounded-2xl">
+                        {posts.length === 0 ? "此分区暂无内容..." : "..."}
+                    </div>
+                )}
+            </section>
+        </main>
+    );
 };
 
-const App: React.FC = () => {
-  // Initialize state from LocalStorage or defaults
+export const App: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>(() => loadState(KEYS.POSTS, INITIAL_POSTS));
   const [categories, setCategories] = useState<string[]>(() => loadState(KEYS.CATEGORIES, DEFAULT_CATEGORIES));
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => loadState(KEYS.ANNOUNCEMENTS, INITIAL_ANNOUNCEMENTS));
   const [links, setLinks] = useState<FriendlyLink[]>(() => loadState(KEYS.LINKS, INITIAL_LINKS));
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => loadState(KEYS.CONFIG, DEFAULT_SITE_CONFIG));
   
-  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem(KEYS.ADMIN) === 'true');
-  const [isDark, setIsDark] = useState(() => loadState(KEYS.THEME, false)); // Dark mode state
-  
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
+  const [isAdmin, setIsAdmin] = useState(() => loadState(KEYS.ADMIN, false));
+  const [isDark, setIsDark] = useState(() => loadState(KEYS.THEME, false));
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
   const [hitokoto, setHitokoto] = useState<{ text: string; from: string } | null>(null);
-  const [visitorCount, setVisitorCount] = useState(0); 
 
-  // Persistence Effects
   useEffect(() => localStorage.setItem(KEYS.POSTS, JSON.stringify(posts)), [posts]);
   useEffect(() => localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(categories)), [categories]);
   useEffect(() => localStorage.setItem(KEYS.ANNOUNCEMENTS, JSON.stringify(announcements)), [announcements]);
   useEffect(() => localStorage.setItem(KEYS.LINKS, JSON.stringify(links)), [links]);
   useEffect(() => localStorage.setItem(KEYS.CONFIG, JSON.stringify(siteConfig)), [siteConfig]);
-  
-  // Theme Effect
-  useEffect(() => {
-    localStorage.setItem(KEYS.THEME, JSON.stringify(isDark));
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDark]);
+  useEffect(() => localStorage.setItem(KEYS.ADMIN, JSON.stringify(isAdmin)), [isAdmin]);
+  useEffect(() => localStorage.setItem(KEYS.THEME, JSON.stringify(isDark)), [isDark]);
 
-  const allUsedTags = useMemo(() => {
-    const tags = new Set<string>();
-    posts.forEach(p => p.tags.forEach(t => tags.add(t)));
-    return Array.from(tags);
-  }, [posts]);
+  useEffect(() => {
+    if (isDark) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [isDark]);
 
   useEffect(() => {
     const fetchHitokoto = async () => {
@@ -904,44 +924,112 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogin = async (key: string) => {
-    try {
-      const hash = await digestMessage(key);
-      if (hash === ADMIN_HASH) {
-        setIsAdmin(true);
-        localStorage.setItem(KEYS.ADMIN, 'true');
-        setIsLoginModalOpen(false);
-      } else {
-        alert("密钥错误");
-      }
-    } catch (e) {
-      console.error("Login Error:", e);
-      alert("验证出错，请重试");
+    const hash = await digestMessage(key);
+    if (hash === ADMIN_HASH) {
+      setIsAdmin(true);
+      setIsLoginOpen(false);
+    } else {
+      alert("密钥错误");
     }
   };
 
   const handleSavePost = (post: Post) => {
-    if (editor.mode === 'create') setPosts([post, ...posts]);
-    else setPosts(posts.map(p => p.id === post.id ? post : p));
+    if (editor.mode === 'create') {
+      setPosts([post, ...posts]);
+    } else {
+      setPosts(posts.map(p => p.id === post.id ? post : p));
+    }
+    setEditor({ ...editor, isOpen: false });
   };
 
-  const filteredPosts = posts.filter(post => post.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  const handleDeletePost = (id: string) => {
+    if (confirm('确定要删除此条目吗？此操作无法撤销。')) {
+      setPosts(posts.filter(p => p.id !== id));
+    }
+  };
+  
+  const handleEditPost = (post: Post) => {
+      setEditor({ isOpen: true, mode: 'edit', currentPost: post });
+  };
+
+  const filteredPosts = posts.filter(p => 
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    p.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
+  const allTags = Array.from(new Set(posts.flatMap(p => p.tags)));
 
   return (
     <HashRouter>
-      <div className="min-h-screen bg-white dark:bg-dark-bg text-gray-800 dark:text-gray-200 flex flex-col transition-colors duration-300">
-        <Header isAdmin={isAdmin} isDark={isDark} toggleTheme={() => setIsDark(!isDark)} onLoginClick={() => setIsLoginModalOpen(true)} onLogout={() => { setIsAdmin(false); localStorage.removeItem(KEYS.ADMIN); }} onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })} searchQuery={searchQuery} setSearchQuery={setSearchQuery} siteConfig={siteConfig} />
-        <Routes>
-          <Route path="/" element={<HomePage posts={filteredPosts} categories={categories} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDelete={id => setPosts(posts.filter(p => p.id !== id))} visitorCount={visitorCount} hitokoto={hitokoto} announcements={announcements} siteConfig={siteConfig} />} />
-          <Route path="/post/:id" element={<PostDetail posts={posts} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} />} />
-          <Route path="/dashboard" element={isAdmin ? <Dashboard posts={posts} categories={categories} announcements={announcements} links={links} siteConfig={siteConfig} onUpdatePosts={setPosts} onUpdateCategories={setCategories} onUpdateAnnouncements={setAnnouncements} onUpdateLinks={setLinks} onUpdateSiteConfig={setSiteConfig} onEditPost={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDeletePost={id => setPosts(posts.filter(p => p.id !== id))} /> : <div className="p-20 text-center">无权访问</div>} />
-        </Routes>
-        <Footer links={links} isAdmin={isAdmin} visitorCount={visitorCount} siteConfig={siteConfig} />
-        <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} onLogin={handleLogin} />
-        <EditorModal isOpen={editor.isOpen} mode={editor.mode} initialData={editor.currentPost} categories={categories} allTags={allUsedTags} onClose={() => setEditor({ ...editor, isOpen: false })} onSave={handleSavePost} />
-        <ScrollToTop />
-      </div>
+        <div className={`min-h-screen flex flex-col transition-colors duration-500 bg-zine-paper dark:bg-dark-bg ${isDark ? 'dark' : ''}`}>
+             <ScrollToTop />
+             <Header 
+                isAdmin={isAdmin} 
+                isDark={isDark} 
+                toggleTheme={() => setIsDark(!isDark)} 
+                onLoginClick={() => setIsLoginOpen(true)}
+                onLogout={() => setIsAdmin(false)}
+                onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                siteConfig={siteConfig}
+             />
+             
+             <Routes>
+                <Route path="/" element={
+                    <HomeWithNavigation 
+                        posts={filteredPosts} 
+                        categories={categories}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
+                        isAdmin={isAdmin}
+                        handleEditPost={handleEditPost}
+                        handleDeletePost={handleDeletePost}
+                        siteConfig={siteConfig}
+                        announcements={announcements}
+                        hitokoto={hitokoto}
+                    />
+                } />
+                <Route path="/post/:id" element={<PostDetail posts={posts} isAdmin={isAdmin} onEdit={handleEditPost} />} />
+                <Route path="/dashboard" element={
+                    isAdmin ? (
+                        <Dashboard 
+                            posts={posts} 
+                            categories={categories} 
+                            announcements={announcements} 
+                            links={links} 
+                            siteConfig={siteConfig}
+                            onUpdatePosts={setPosts} 
+                            onUpdateCategories={setCategories} 
+                            onUpdateAnnouncements={setAnnouncements} 
+                            onUpdateLinks={setLinks}
+                            onUpdateSiteConfig={setSiteConfig}
+                            onEditPost={handleEditPost}
+                            onDeletePost={handleDeletePost}
+                        />
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center p-20">
+                            <p className="text-gray-400 font-serif">Access Denied.</p>
+                        </div>
+                    )
+                } />
+             </Routes>
+
+             <Footer links={links} isAdmin={isAdmin} visitorCount={0} siteConfig={siteConfig} />
+
+             <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={handleLogin} />
+             
+             <EditorModal 
+                isOpen={editor.isOpen} 
+                mode={editor.mode} 
+                initialData={editor.currentPost} 
+                categories={categories}
+                allTags={allTags}
+                onClose={() => setEditor({ ...editor, isOpen: false })} 
+                onSave={handleSavePost} 
+             />
+        </div>
     </HashRouter>
   );
 };
-
-export { App };
