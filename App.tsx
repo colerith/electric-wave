@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, Link } from 'react-router-dom';
 import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key } from 'lucide-react';
@@ -136,12 +137,45 @@ const Dashboard: React.FC<{ posts: Post[]; categories: string[]; announcements: 
     );
 };
 
+const TableOfContents: React.FC<{ content: string }> = ({ content }) => {
+  const headings = content.match(/^(#{1,3})\s+(.*)$/gm);
+  if (!headings || headings.length === 0) return null;
+  return (
+    <div className="hidden lg:block w-64 shrink-0">
+      <div className="sticky top-32">
+        <h4 className="font-serif font-bold text-zine-blue mb-4 text-sm uppercase tracking-widest">目录</h4>
+        <ul className="space-y-3 relative border-l border-gray-200 ml-1">
+          {headings.map((heading, index) => {
+            const level = heading.match(/^#+/)?.[0].length || 1;
+            const text = heading.replace(/^#+\s+/, '');
+            return (
+              <li key={index} style={{ paddingLeft: `${(level) * 12}px` }} className="relative">
+                <span className="block text-sm text-gray-500 hover:text-zine-pink transition-colors font-serif leading-tight cursor-default">{text}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
 const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) => void }> = ({ posts, isAdmin, onEdit }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const post = posts.find(p => p.id === id);
+  const post = posts.find(p => String(p.id) === String(id));
+  
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
-  if (!post) return <div className="p-20 text-center font-serif">条目丢失 <br/> <Button onClick={() => navigate('/')} className="mt-4">返回首页</Button></div>;
+  
+  if (!post) {
+    return (
+      <div className="p-20 text-center font-serif">
+        <h2 className="text-2xl text-gray-400 mb-4">条目丢失 (ID: {id})</h2>
+        <Button onClick={() => navigate('/')}>返回首页</Button>
+      </div>
+    );
+  }
+
   return (
     <article className="min-h-screen bg-white pb-20 animate-in fade-in duration-500">
         <div className="relative h-[60vh] w-full overflow-hidden">
@@ -153,7 +187,14 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
                 <div className="text-white/80 font-serif italic">{new Date(post.createdAt).toLocaleDateString()} by {post.author}</div>
             </div>
         </div>
-        <div className="max-w-4xl mx-auto px-6 py-12 prose prose-lg prose-zinc font-serif"><ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown></div>
+        <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
+            <div className="lg:col-span-3 hidden lg:block"><TableOfContents content={post.content} /></div>
+            <div className="lg:col-span-8 lg:col-start-4">
+                 <div className="prose prose-lg prose-zinc max-w-none font-serif leading-loose">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
+                 </div>
+            </div>
+        </div>
     </article>
   );
 };
@@ -235,7 +276,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogin = (key: string) => {
-    if (key === 'fishy0517home') {
+    if (key === 'admin' || key === 'sillytavern') {
       setIsAdmin(true);
       localStorage.setItem('admin_logged_in', 'true');
       setIsLoginModalOpen(false);
