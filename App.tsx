@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity } from 'lucide-react';
+import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity, FileCode } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -11,7 +11,6 @@ import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
 
 // --- Security Helper ---
-// SHA-256 hash for 'fishy0517home'. 
 const ADMIN_HASH = "72d5ca73780ebff2deba2ce5899c86a5582514b9e56760e36ef56a68219a5171";
 
 // Storage Keys
@@ -391,19 +390,64 @@ const Dashboard: React.FC<{
     const [newLink, setNewLink] = useState({ title: '', url: '' });
     const [newAnnouncement, setNewAnnouncement] = useState('');
 
-    const handleExportData = () => {
-        const data = {
-            posts,
-            categories,
-            announcements,
-            links,
-            siteConfig
-        };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const handleExportTs = () => {
+        // Construct the full content of types.ts
+        const typesFileContent = `
+export interface Post {
+  id: string;
+  title: string;
+  excerpt: string;
+  content: string; // Now supports Markdown
+  tags: string[];
+  coverImage: string;
+  createdAt: number;
+  author: string;
+  category: string; // Dynamic category
+  isPinned?: boolean;
+}
+
+export interface FriendlyLink {
+  id: string;
+  title: string;
+  url: string;
+}
+
+export interface Announcement {
+    id: string;
+    content: string;
+    isActive: boolean;
+}
+
+export interface SiteConfig {
+    siteName: string;
+    avatarUrl: string;
+    startDate: string; // Format: YYYY-MM-DD
+}
+
+export type ViewMode = 'gallery' | 'list';
+
+export interface EditorState {
+  isOpen: boolean;
+  mode: 'create' | 'edit';
+  currentPost: Post | null;
+}
+
+export const DEFAULT_CATEGORIES = ${JSON.stringify(categories, null, 2)};
+
+export const DEFAULT_SITE_CONFIG: SiteConfig = ${JSON.stringify(siteConfig, null, 2)};
+
+export const INITIAL_POSTS: Post[] = ${JSON.stringify(posts, null, 2)};
+
+export const INITIAL_LINKS: FriendlyLink[] = ${JSON.stringify(links, null, 2)};
+
+export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announcements, null, 2)};
+`;
+
+        const blob = new Blob([typesFileContent], { type: 'text/typescript' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `types.ts`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -573,11 +617,12 @@ const Dashboard: React.FC<{
                                 </div>
                                 <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
                                     <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-4 uppercase tracking-wider">数据维护</label>
-                                    <Button onClick={handleExportData} icon={<Download size={16} />} variant="secondary" className="w-full">
-                                        导出全站数据 (备份)
+                                    <Button onClick={handleExportTs} icon={<FileCode size={16} />} variant="secondary" className="w-full">
+                                        导出 types.ts (用于覆盖更新)
                                     </Button>
                                     <p className="mt-3 text-xs text-gray-400 leading-relaxed">
-                                        由于这是静态网站，你在后台的修改只会保存在当前浏览器中。若要永久修改（或在其他设备同步），请导出数据，并将 JSON 内容更新到代码仓库中。
+                                        点击上方按钮下载 `types.ts` 文件。将该文件直接覆盖到你 GitHub 仓库中的 `types.ts` 即可完成数据更新。
+                                        (无需再手动复制 JSON 内容)
                                     </p>
                                 </div>
                             </div>
