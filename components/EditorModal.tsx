@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Post } from '../types';
 import { Button } from './Button';
-import { X, Wand2, Loader2, Image as ImageIcon, Tag, Star, Bold, Italic, Link, Quote, Code, List, Heading1, Heading2, Minus } from 'lucide-react';
+import { X, Wand2, Loader2, Image as ImageIcon, Tag, Star, Bold, Italic, Link, Quote, Code, List, Heading1, Heading2, Minus, Upload } from 'lucide-react';
 import { generatePostEnhancement } from '../services/geminiService';
 
 interface EditorModalProps {
@@ -42,6 +42,8 @@ export const EditorModal: React.FC<EditorModalProps> = ({
   const [showAiInput, setShowAiInput] = useState(false);
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTarget, setUploadTarget] = useState<'cover' | 'content' | null>(null);
 
   useEffect(() => {
     if (initialData) {
@@ -74,7 +76,7 @@ export const EditorModal: React.FC<EditorModalProps> = ({
       category: formData.category || categories[0],
       coverImage: formData.coverImage || '',
       createdAt: initialData?.createdAt || Date.now(),
-      author: initialData?.author || 'Colerith',
+      author: '电波系', // Fixed author name
       isPinned: formData.isPinned
     };
 
@@ -127,8 +129,34 @@ export const EditorModal: React.FC<EditorModalProps> = ({
     }, 0);
   };
 
+  const triggerUpload = (target: 'cover' | 'content') => {
+      setUploadTarget(target);
+      if (fileInputRef.current) {
+          fileInputRef.current.value = ''; // Reset
+          fileInputRef.current.click();
+      }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const result = event.target?.result as string;
+          if (uploadTarget === 'cover') {
+              setFormData(prev => ({ ...prev, coverImage: result }));
+          } else if (uploadTarget === 'content') {
+              insertMarkdown(`\n![图片](${result})\n`);
+          }
+      };
+      reader.readAsDataURL(file);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/60 backdrop-blur-sm p-4 sm:p-6">
+      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+      
       <div className="w-full max-w-6xl h-full max-h-[95vh] bg-zine-paper dark:bg-dark-paper flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-500 rounded-sm">
         
         {/* Header */}
@@ -183,6 +211,7 @@ export const EditorModal: React.FC<EditorModalProps> = ({
                              <button onClick={() => insertMarkdown('[链接文字](url)')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="链接"><Link size={14}/></button>
                              <button onClick={() => insertMarkdown('```\n', '\n```')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="代码块"><Code size={14}/></button>
                              <button onClick={() => insertMarkdown('\n\n---\n\n')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="分割线"><Minus size={14}/></button>
+                             <button onClick={() => triggerUpload('content')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="上传图片"><ImageIcon size={14}/></button>
                          </div>
                      )}
                   </div>
@@ -228,13 +257,19 @@ export const EditorModal: React.FC<EditorModalProps> = ({
               
               <div className="space-y-3">
                  <label className="text-xs font-bold uppercase tracking-widest text-gray-400 flex items-center gap-2"><ImageIcon size={12}/> 封面图片</label>
-                 <input 
-                    type="text" 
-                    value={formData.coverImage} 
-                    onChange={e => setFormData({...formData, coverImage: e.target.value})}
-                    placeholder="https://... (留空则无图)"
-                    className="w-full p-3 bg-white dark:bg-slate-800 dark:text-white border border-gray-200 dark:border-gray-700 outline-none focus:border-zine-blue text-sm"
-                 />
+                 <div className="flex gap-2">
+                     <input 
+                        type="text" 
+                        value={formData.coverImage} 
+                        onChange={e => setFormData({...formData, coverImage: e.target.value})}
+                        placeholder="https://... 或点击上传"
+                        className="flex-1 p-3 bg-white dark:bg-slate-800 dark:text-white border border-gray-200 dark:border-gray-700 outline-none focus:border-zine-blue text-sm truncate"
+                     />
+                     <Button type="button" variant="secondary" onClick={() => triggerUpload('cover')} className="!px-3" title="上传本地图片">
+                        <Upload size={14} />
+                     </Button>
+                 </div>
+                 
                  {formData.coverImage && (
                      <div className="aspect-video w-full rounded overflow-hidden bg-gray-100 dark:bg-slate-900 border border-gray-200 dark:border-gray-700">
                          <img src={formData.coverImage} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display='none')} />
