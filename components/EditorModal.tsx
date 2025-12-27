@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { Post } from '../types';
 import { Button } from './Button';
-import { X, Wand2, Loader2, Image as ImageIcon, Tag, Star, Bold, Italic, Link, Quote, Code, List, Heading1, Heading2, Minus, Upload } from 'lucide-react';
+import { X, Wand2, Loader2, Image as ImageIcon, Tag, Star, Bold, Italic, Link, Quote, Code, List, Heading1, Heading2, Minus, Upload, ListOrdered } from 'lucide-react';
 import { generatePostEnhancement } from '../services/geminiService';
 
 interface EditorModalProps {
@@ -112,6 +113,7 @@ export const EditorModal: React.FC<EditorModalProps> = ({
     if (!textareaRef.current) return;
     const start = textareaRef.current.selectionStart;
     const end = textareaRef.current.selectionEnd;
+    const scrollTop = textareaRef.current.scrollTop; // Capture scroll position
     const text = formData.content || '';
     const before = text.substring(0, start);
     const selection = text.substring(start, end);
@@ -120,11 +122,12 @@ export const EditorModal: React.FC<EditorModalProps> = ({
     const newText = before + prefix + selection + suffix + after;
     setFormData({ ...formData, content: newText });
     
-    // Defer cursor update slightly
+    // Defer cursor update slightly and restore scroll
     setTimeout(() => {
         if(textareaRef.current) {
             textareaRef.current.focus();
             textareaRef.current.setSelectionRange(start + prefix.length, end + prefix.length);
+            textareaRef.current.scrollTop = scrollTop; // Restore scroll position
         }
     }, 0);
   };
@@ -202,12 +205,14 @@ export const EditorModal: React.FC<EditorModalProps> = ({
                      
                      {/* Markdown Toolbar */}
                      {viewMode === 'edit' && (
-                         <div className="flex items-center gap-1 border-l border-gray-200 dark:border-gray-700 pl-4">
+                         <div className="flex items-center gap-1 border-l border-gray-200 dark:border-gray-700 pl-4 flex-wrap">
                              <button onClick={() => insertMarkdown('**', '**')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="加粗"><Bold size={14}/></button>
                              <button onClick={() => insertMarkdown('*', '*')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="斜体"><Italic size={14}/></button>
                              <button onClick={() => insertMarkdown('# ', '')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="标题1"><Heading1 size={14}/></button>
                              <button onClick={() => insertMarkdown('## ', '')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="标题2"><Heading2 size={14}/></button>
                              <button onClick={() => insertMarkdown('> ', '')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="引用"><Quote size={14}/></button>
+                             <button onClick={() => insertMarkdown('- ', '')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="无序列表"><List size={14}/></button>
+                             <button onClick={() => insertMarkdown('1. ', '')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="有序列表"><ListOrdered size={14}/></button>
                              <button onClick={() => insertMarkdown('[链接文字](url)')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="链接"><Link size={14}/></button>
                              <button onClick={() => insertMarkdown('```\n', '\n```')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="代码块"><Code size={14}/></button>
                              <button onClick={() => insertMarkdown('\n\n---\n\n')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="分割线"><Minus size={14}/></button>
@@ -234,12 +239,12 @@ export const EditorModal: React.FC<EditorModalProps> = ({
                             ref={textareaRef}
                             value={formData.content} 
                             onChange={e => setFormData({...formData, content: e.target.value})} 
-                            className="w-full h-full p-6 outline-none text-base font-sans font-medium leading-relaxed resize-none text-gray-700 dark:text-gray-200 min-h-[400px]" 
+                            className="w-full h-full p-6 outline-none text-base font-sans font-medium leading-relaxed resize-none text-gray-700 dark:text-gray-200 bg-transparent min-h-[400px]" 
                             placeholder="# 在此输入内容 (支持 Markdown)..." 
                         />
                     ) : (
                         <div className="w-full h-full p-6 overflow-y-auto prose prose-blue dark:prose-invert max-w-none">
-                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{formData.content || ''}</ReactMarkdown>
+                             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{formData.content || ''}</ReactMarkdown>
                         </div>
                     )}
                 </div>
