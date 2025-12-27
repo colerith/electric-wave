@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>电波FM | Electric Wave</title>
-
+    
     <!-- 
       === 社交媒体分享预览设置 (Open Graph) === 
       当前使用外部图床链接。
@@ -23,18 +23,19 @@
     <meta name="twitter:title" content="电波FM | Electric Wave" />
     <meta name="twitter:description" content="电波系的吐泡泡小窝🫧" />
     <meta name="twitter:image" content="https://i.postimg.cc/2yv8dqH7/og-image.png" />
-    
+
     <!-- 网站图标设置 -->
     <link rel="icon" href="favicon.png" />
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700;900&display=swap" rel="stylesheet">
     <!-- 不蒜子统计脚本 -->
     <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
     <script>
       tailwind.config = {
+        darkMode: 'class', // 启用手动切换暗色模式
         theme: {
           extend: {
             fontFamily: {
@@ -48,6 +49,9 @@
               'zine-pink-light': '#FFE4EA',
               'zine-paper': '#FAFAF9', // Warm white
               'zine-gray': '#E5E5E5',
+              // Dark mode specific colors
+              'dark-bg': '#0f172a',
+              'dark-paper': '#1e293b',
             },
             backgroundImage: {
               'noise': "url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22 opacity=%220.05%22/%3E%3C/svg%3E')",
@@ -55,6 +59,7 @@
             boxShadow: {
               'soft': '0 4px 20px -2px rgba(27, 60, 115, 0.1)',
               'sharp': '4px 4px 0px 0px #1B3C73',
+              'sharp-dark': '4px 4px 0px 0px #FF9EBB',
             },
             animation: {
               'blob': 'blob 10s infinite',
@@ -76,8 +81,15 @@
         background-color: #FAFAF9;
         color: #1B3C73;
         overflow-x: hidden;
+        transition: background-color 0.3s, color 0.3s;
       }
       
+      /* Dark Mode Styles */
+      html.dark body {
+        background-color: #0f172a;
+        color: #e2e8f0;
+      }
+
       /* Grain Overlay */
       .bg-grain {
         position: fixed;
@@ -88,6 +100,10 @@
         pointer-events: none;
         z-index: 50;
         background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
+      }
+      html.dark .bg-grain {
+        opacity: 0.5;
+        filter: invert(1);
       }
 
       /* Diffusion Background Blobs */
@@ -100,7 +116,12 @@
         z-index: -1;
         overflow: hidden;
         background: #FAFAF9;
+        transition: background 0.3s;
       }
+      html.dark .diffusion-bg {
+        background: #0f172a;
+      }
+      
       .blob {
         position: absolute;
         border-radius: 50%;
@@ -108,9 +129,19 @@
         opacity: 0.6;
         animation: blob 20s infinite alternate;
       }
+      /* Adjust blob colors for dark mode */
+      html.dark .blob {
+        opacity: 0.2;
+        filter: blur(100px);
+      }
+      
       .blob-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: #FFD6E0; animation-delay: 0s; }
       .blob-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: #D6E4FF; animation-delay: 2s; }
       .blob-3 { top: 40%; left: 40%; width: 40vw; height: 40vw; background: #E0F7FA; animation-delay: 4s; }
+
+      html.dark .blob-1 { background: #4c1d95; }
+      html.dark .blob-2 { background: #1e3a8a; }
+      html.dark .blob-3 { background: #0f766e; }
 
       /* Code Block Styling - Elegant Editorial */
       pre {
@@ -124,6 +155,12 @@
         line-height: 1.6;
         overflow-x: auto;
       }
+      html.dark pre {
+        background-color: #1e293b !important;
+        color: #e2e8f0 !important;
+        border-left-color: #FF9EBB;
+      }
+      
       code {
         font-family: 'Menlo', monospace;
       }
@@ -132,41 +169,158 @@
         color: #1B3C73;
         padding: 2px 6px;
         font-size: 0.9em;
+        border-radius: 2px;
+      }
+      html.dark p > code, html.dark li > code {
+        background-color: #334155;
+        color: #FF9EBB;
       }
 
-      /* Markdown Typography */
-      .prose h1, .prose h2, .prose h3 {
+      /* Markdown Typography Updates */
+      /* Global Prose Font Override */
+      .prose {
+        font-family: "Noto Sans SC", sans-serif; /* Body font update */
+        font-weight: 500; /* Slightly heavier for readability */
+        color: #334155;
+      }
+      html.dark .prose {
+        color: #cbd5e1;
+      }
+
+      /* === Heading Styles (Distinct & Hierarchical) === */
+      .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+        margin-top: 2.5em;
+        margin-bottom: 1em;
+        line-height: 1.3;
+      }
+      
+      /* H1: Commanding, Serif Black, Bottom Double Border */
+      .prose h1 { 
         font-family: "Noto Serif SC", serif;
+        font-weight: 900; 
+        font-size: 2.5em;
         color: #1B3C73;
+        border-bottom: 4px double #cbd5e1;
+        padding-bottom: 0.3em;
         letter-spacing: -0.02em;
       }
-      .prose h1 { font-weight: 900; }
-      .prose h2 { margin-top: 2.5em; position: relative; display: inline-block; }
-      /* Half-highlight effect for h2 */
-      .prose h2::after {
-        content: '';
-        position: absolute;
-        bottom: 2px;
-        left: 0;
-        width: 100%;
-        height: 8px;
-        background: #FFD6E0;
-        z-10: -1;
-        opacity: 0.6;
+      html.dark .prose h1 { color: #e2e8f0; border-bottom-color: #475569; }
+      
+      /* H2: Section Divider, Serif Bold, Left Solid Marker + Subtle Background */
+      .prose h2 { 
+        font-family: "Noto Serif SC", serif;
+        font-size: 1.8em;
+        font-weight: 700;
+        color: #1B3C73;
+        position: relative; 
+        padding-left: 1rem;
+        border-left: 6px solid #FF9EBB;
+        background: linear-gradient(to right, rgba(255, 158, 187, 0.1), transparent);
+        padding-top: 0.2em;
+        padding-bottom: 0.2em;
+        border-radius: 0 4px 4px 0;
       }
+      html.dark .prose h2 { color: #e2e8f0; border-left-color: #FF9EBB; background: linear-gradient(to right, rgba(255, 158, 187, 0.15), transparent); }
+      .prose h2::after { content: none; } /* Clear old styles */
+
+      /* H3: Sub-section, Sans-Serif Bold, Distinct Blue Color */
+      .prose h3 {
+        font-family: "Noto Sans SC", sans-serif;
+        font-size: 1.4em;
+        font-weight: 700;
+        color: #587DBD; /* Lighter Blue */
+        display: flex;
+        align-items: center;
+      }
+      .prose h3::before {
+        content: '#';
+        margin-right: 0.5em;
+        color: #cbd5e1;
+        font-weight: 400;
+      }
+      html.dark .prose h3 { color: #60a5fa; }
+      html.dark .prose h3::before { color: #475569; }
+
+      /* H4: Detail Header, Serif Italic, Elegant Grey */
+      .prose h4 {
+        font-family: "Noto Serif SC", serif;
+        font-size: 1.25em;
+        font-weight: 600;
+        font-style: italic;
+        color: #64748b;
+        border-bottom: 1px dashed #cbd5e1;
+        display: inline-block;
+        padding-bottom: 0.2em;
+      }
+      html.dark .prose h4 { color: #94a3b8; border-bottom-color: #475569; }
+
+      /* H5: Label-like, Small, Uppercase, Pink Accent */
+      .prose h5 {
+        font-family: "Noto Sans SC", sans-serif;
+        font-size: 1em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #FF9EBB;
+        margin-bottom: 0.5em;
+      }
+
+      /* H6: Technical/Note, Monospace, Boxed */
+      .prose h6 {
+        font-family: 'Menlo', monospace;
+        font-size: 0.85em;
+        color: #64748b;
+        background-color: #f1f5f9;
+        padding: 0.4em 0.8em;
+        border-radius: 4px;
+        display: inline-block;
+        margin-top: 1.5em;
+      }
+      html.dark .prose h6 {
+        color: #cbd5e1;
+        background-color: #1e293b;
+      }
+
+      /* Divider (HR) Spacing */
+      .prose hr {
+        border-color: #cbd5e1;
+        margin-top: 4rem;
+        margin-bottom: 4rem;
+        border-width: 0;
+        border-top-width: 2px;
+        border-style: dashed;
+      }
+      html.dark .prose hr {
+        border-color: #475569;
+      }
+
+      .prose strong {
+        color: #0f172a;
+        font-weight: 700;
+      }
+      html.dark .prose strong {
+        color: #fff;
+      }
+
       .prose blockquote {
-        border-left: 2px solid #1B3C73;
+        border-left: 3px solid #FF9EBB; /* Changed to pink */
         background-color: transparent;
         font-family: "Noto Serif SC", serif;
         font-style: italic;
         padding-left: 1.5rem;
         color: #587DBD;
       }
+      html.dark .prose blockquote {
+        color: #94a3b8;
+      }
+
       .prose img {
         display: block;
-        margin: 2rem auto;
+        margin: 3rem auto;
         box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
+        border-radius: 4px;
       }
+
       .prose a {
         color: #1B3C73;
         text-decoration: underline;
@@ -174,18 +328,33 @@
         text-decoration-thickness: 2px;
         text-underline-offset: 4px;
         transition: all 0.2s;
+        font-weight: 600;
+      }
+      html.dark .prose a {
+        color: #60a5fa;
+        text-decoration-color: #1e3a8a;
       }
       .prose a:hover {
         background-color: #FF9EBB;
         color: white;
         text-decoration: none;
       }
+      html.dark .prose a:hover {
+        background-color: #1e3a8a;
+      }
+
+      /* Lists */
+      .prose ul { list-style-type: disc; padding-left: 1.5em; }
+      .prose ol { list-style-type: decimal; padding-left: 1.5em; }
+      .prose li { margin-top: 0.5em; margin-bottom: 0.5em; }
 
       /* Scrollbar */
       ::-webkit-scrollbar { width: 8px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
       ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+      html.dark ::-webkit-scrollbar-thumb { background: #475569; }
+      html.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
     </style>
   <script type="importmap">
 {
