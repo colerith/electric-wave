@@ -4,12 +4,14 @@ import { HashRouter, Routes, Route, useNavigate, useParams, Link, useLocation } 
 import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { Post, INITIAL_POSTS, INITIAL_LINKS, FriendlyLink, EditorState, ViewMode, Announcement, INITIAL_ANNOUNCEMENTS, DEFAULT_CATEGORIES, SiteConfig, DEFAULT_SITE_CONFIG } from './types';
 import { GalleryCard } from './components/GalleryCard';
 import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
 
 // --- Security Helper ---
+// SHA-256 hash for 'fishy0517home'. 
 const ADMIN_HASH = "72d5ca73780ebff2deba2ce5899c86a5582514b9e56760e36ef56a68219a5171";
 
 // Storage Keys
@@ -758,7 +760,7 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
             <div className="lg:col-span-3 hidden lg:block"><SimpleTableOfContents content={post.content} /></div>
             <div className="lg:col-span-8 lg:col-start-4">
                  <div className="prose prose-lg prose-zinc dark:prose-invert max-w-none font-sans font-medium leading-loose">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{post.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>{post.content}</ReactMarkdown>
                  </div>
             </div>
         </div>
@@ -840,7 +842,7 @@ const HomeWithNavigation: React.FC<{
                             <div key={post.id} onClick={() => navigate(`/post/${post.id}`)} className="group cursor-pointer">
                                 <div className={`aspect-[2/1] overflow-hidden rounded-sm mb-6 bg-gray-100 dark:bg-slate-800 shadow-sm ${!post.coverImage && 'flex items-center justify-center bg-gradient-to-br from-zine-blue/5 to-zine-pink/5'}`}>
                                     {post.coverImage ? (
-                                        <img src={post.coverImage} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" alt={post.title} />
+                                        <img src={post.coverImage} className="w-full h-full object-cover transition-all duration-700 hover:scale-105" alt={post.title} />
                                     ) : (
                                         <span className="font-serif italic text-gray-300 dark:text-gray-600 text-2xl">Electric Wave</span>
                                     )}
