@@ -1,3 +1,4 @@
+
 export interface Post {
   id: string;
   title: string;
@@ -24,7 +25,9 @@ export interface Announcement {
 }
 
 export interface SiteConfig {
+    siteName: string;
     avatarUrl: string;
+    startDate: string; // Format: YYYY-MM-DD
 }
 
 export type ViewMode = 'gallery' | 'list';
@@ -36,6 +39,12 @@ export interface EditorState {
 }
 
 export const DEFAULT_CATEGORIES = ['指南', '脚本', '设定', '资源'];
+
+export const DEFAULT_SITE_CONFIG: SiteConfig = {
+    siteName: '电波FM',
+    avatarUrl: 'https://github.com/Colerith.png',
+    startDate: '2025-12-27'
+};
 
 export const INITIAL_POSTS: Post[] = [
   {
