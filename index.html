@@ -77,6 +77,11 @@
       }
     </script>
     <style>
+      /* Prevent layout shifts when scrollbar appears/disappears */
+      html {
+        scrollbar-gutter: stable;
+      }
+
       body {
         background-color: #FAFAF9;
         color: #1B3C73;
@@ -368,7 +373,8 @@
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
     "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
-    "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1"
+    "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1",
+    "remark-breaks": "https://esm.sh/remark-breaks@^4.0.0"
   }
 }
 </script>
