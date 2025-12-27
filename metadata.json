@@ -1,0 +1,5 @@
+{
+  "name": "SillyTavern Archives",
+  "description": "A Swiss International Style inspired CMS for managing SillyTavern guides and resources, featuring a Notion-style gallery view and Gemini AI integration.",
+  "requestFramePermissions": []
+}

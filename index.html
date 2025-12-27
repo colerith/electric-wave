@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>电波FM | Electric Wave</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Noto Sans SC"', 'sans-serif'],
+              serif: ['"Noto Serif SC"', 'serif'],
+            },
+            colors: {
+              'zine-blue': '#1B3C73', // Deep Lapis
+              'zine-blue-light': '#587DBD',
+              'zine-pink': '#FF9EBB', // Risograph Pink
+              'zine-pink-light': '#FFE4EA',
+              'zine-paper': '#FAFAF9', // Warm white
+              'zine-gray': '#E5E5E5',
+            },
+            backgroundImage: {
+              'noise': "url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22 opacity=%220.05%22/%3E%3C/svg%3E')",
+            },
+            boxShadow: {
+              'soft': '0 4px 20px -2px rgba(27, 60, 115, 0.1)',
+              'sharp': '4px 4px 0px 0px #1B3C73',
+            },
+            animation: {
+              'blob': 'blob 10s infinite',
+            },
+            keyframes: {
+              blob: {
+                '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                '100%': { transform: 'translate(0px, 0px) scale(1)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #FAFAF9;
+        color: #1B3C73;
+        overflow-x: hidden;
+      }
+      
+      /* Grain Overlay */
+      .bg-grain {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 50;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
+      }
+
+      /* Diffusion Background Blobs */
+      .diffusion-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        overflow: hidden;
+        background: #FAFAF9;
+      }
+      .blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(80px);
+        opacity: 0.6;
+        animation: blob 20s infinite alternate;
+      }
+      .blob-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: #FFD6E0; animation-delay: 0s; }
+      .blob-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: #D6E4FF; animation-delay: 2s; }
+      .blob-3 { top: 40%; left: 40%; width: 40vw; height: 40vw; background: #E0F7FA; animation-delay: 4s; }
+
+      /* Code Block Styling - Elegant Editorial */
+      pre {
+        background-color: #F5F5F0 !important;
+        color: #1B3C73 !important;
+        border-left: 3px solid #1B3C73;
+        border-radius: 0;
+        padding: 1.5rem !important;
+        font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+        font-size: 0.9rem;
+        line-height: 1.6;
+        overflow-x: auto;
+      }
+      code {
+        font-family: 'Menlo', monospace;
+      }
+      p > code, li > code {
+        background-color: #E8F1F5;
+        color: #1B3C73;
+        padding: 2px 6px;
+        font-size: 0.9em;
+      }
+
+      /* Markdown Typography */
+      .prose h1, .prose h2, .prose h3 {
+        font-family: "Noto Serif SC", serif;
+        color: #1B3C73;
+        letter-spacing: -0.02em;
+      }
+      .prose h1 { font-weight: 900; }
+      .prose h2 { margin-top: 2.5em; position: relative; display: inline-block; }
+      /* Half-highlight effect for h2 */
+      .prose h2::after {
+        content: '';
+        position: absolute;
+        bottom: 2px;
+        left: 0;
+        width: 100%;
+        height: 8px;
+        background: #FFD6E0;
+        z-index: -1;
+        opacity: 0.6;
+      }
+      .prose blockquote {
+        border-left: 2px solid #1B3C73;
+        background-color: transparent;
+        font-family: "Noto Serif SC", serif;
+        font-style: italic;
+        padding-left: 1.5rem;
+        color: #587DBD;
+      }
+      .prose img {
+        display: block;
+        margin: 2rem auto;
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
+      }
+      .prose a {
+        color: #1B3C73;
+        text-decoration: underline;
+        text-decoration-color: #FF9EBB;
+        text-decoration-thickness: 2px;
+        text-underline-offset: 4px;
+        transition: all 0.2s;
+      }
+      .prose a:hover {
+        background-color: #FF9EBB;
+        color: white;
+        text-decoration: none;
+      }
+
+      /* Scrollbar */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.11.0",
+    "react-markdown": "https://esm.sh/react-markdown@9.0.1",
+    "remark-gfm": "https://esm.sh/remark-gfm@4.0.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div class="bg-grain"></div>
+    <div class="diffusion-bg">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
+    <div id="root" class="relative z-10"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
