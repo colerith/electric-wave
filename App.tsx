@@ -573,7 +573,6 @@ const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean
 
 const App: React.FC = () => {
   // --- State Management ---
-  // Notice we removed the "loadState" localStorage logic for data, only keeping Admin session
   const [posts, setPosts] = useState<Post[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -589,7 +588,7 @@ const App: React.FC = () => {
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [serverError, setServerError] = useState(false);
+  const [serverError, setServerError] = useState<{isError: boolean, message: string}>({isError: false, message: ''});
 
   // --- API Interaction ---
   
@@ -598,7 +597,10 @@ const App: React.FC = () => {
     const fetchData = async () => {
         try {
             const res = await fetch('/api/data');
-            if (!res.ok) throw new Error("Server error");
+            if (!res.ok) {
+                const text = await res.text().catch(() => '');
+                throw new Error(`Server error: ${res.status} ${res.statusText} ${text ? '- ' + text.slice(0, 50) : ''}`);
+            }
             const data = await res.json();
             
             // Populate state
@@ -608,10 +610,10 @@ const App: React.FC = () => {
             if(data.links) setLinks(data.links);
             if(data.siteConfig) setSiteConfig(data.siteConfig);
             
-            setServerError(false);
-        } catch (e) {
+            setServerError({isError: false, message: ''});
+        } catch (e: any) {
             console.error("Failed to fetch data:", e);
-            setServerError(true);
+            setServerError({isError: true, message: e.message || 'Unknown error'});
         } finally {
             setIsLoading(false);
         }
@@ -619,18 +621,9 @@ const App: React.FC = () => {
     fetchData();
   }, []);
 
-  // 2. Save Data to Server
-  // We debounce or save on specific actions. 
-  // For this architecture, we will create a function that saves the Current State + The Update
-  // However, React state updates are async. 
-  // Reliable way: Update local state -> Trigger Effect -> Save to Server?
-  // Or: Create a master Save function that takes the new object.
-  
   const saveDataToServer = async (newData: any) => {
       setIsSaving(true);
       try {
-          // Construct the full payload based on what's passed or current state
-          // Note: This is a bit naive for high concurrency but fine for single admin.
           const payload = {
               posts: newData.posts !== undefined ? newData.posts : posts,
               categories: newData.categories !== undefined ? newData.categories : categories,
@@ -705,18 +698,18 @@ const App: React.FC = () => {
     } else {
         newPosts = posts.map(p => p.id === post.id ? post : p);
     }
-    updatePosts(newPosts); // Trigger server save
+    updatePosts(newPosts);
   };
 
   const filteredPosts = posts.filter(post => post.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
   // Error State UI
-  if (serverError) {
+  if (serverError.isError) {
       return (
           <div className="min-h-screen bg-zine-paper flex flex-col items-center justify-center p-8 text-center text-zine-blue">
               <WifiOff size={64} className="mb-4 opacity-50"/>
               <h1 className="text-2xl font-serif font-bold mb-2">无法连接到电波塔</h1>
-              <p className="text-gray-500 mb-6">Failed to connect to the server API.</p>
+              <p className="text-gray-500 mb-6">{serverError.message}</p>
               <Button onClick={() => window.location.reload()}>重试连接</Button>
           </div>
       );
