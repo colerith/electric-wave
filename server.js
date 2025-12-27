@@ -5,13 +5,17 @@ import cors from 'cors';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 // --- Configuration ---
 const PORT = process.env.PORT || 3001;
-const DATA_FILE = 'data.json';
-const ADMIN_HASH = "14620c325c044b76c8c084605e54d89069d72115162a5b678f2e293a3889021e"; // Keeping the same hash
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_FILE = path.join(__dirname, 'data.json'); // Use absolute path
 
-// Default Data Structure if file doesn't exist
+const ADMIN_HASH = "14620c325c044b76c8c084605e54d89069d72115162a5b678f2e293a3889021e"; 
+
+// Default Data Structure
 const DEFAULT_DATA = {
   posts: [
     {
@@ -39,95 +43,72 @@ const DEFAULT_DATA = {
   }
 };
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
 
 app.use(cors());
-app.use(bodyParser.json({ limit: '50mb' })); // Increased limit for images/content
+app.use(bodyParser.json({ limit: '50mb' }));
 
 // --- Data Layer Helpers ---
 
-// Ensure data file exists
 async function initData() {
     try {
         await fs.access(DATA_FILE);
+        console.log('Database file found:', DATA_FILE);
     } catch (e) {
-        console.log('Creating new data file...');
+        console.log('Creating new data file at:', DATA_FILE);
         await fs.writeFile(DATA_FILE, JSON.stringify(DEFAULT_DATA, null, 2));
     }
 }
 
-// Read Data
 async function readData() {
     try {
         const raw = await fs.readFile(DATA_FILE, 'utf-8');
         return JSON.parse(raw);
     } catch (e) {
+        console.error("Error reading data:", e);
         return DEFAULT_DATA;
     }
 }
 
-// Write Data
 async function writeData(data) {
     await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
 // --- API Routes ---
 
-// Get all data
 app.get('/api/data', async (req, res) => {
-    const data = await readData();
-    res.json(data);
+    try {
+        console.log('GET /api/data request received');
+        const data = await readData();
+        res.json(data);
+    } catch (error) {
+        console.error('GET /api/data error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
-// Update data (Protected - in a real app, use JWT tokens. Here we trust the key sent in header/body)
 app.post('/api/save', async (req, res) => {
-    const { authKey, data } = req.body;
-    
-    // Simple verification (Ideally, do this with headers and proper auth middleware)
-    // For this simple migration, we'll verify the hash matches server-side.
-    // Note: The client sends the raw key, we hash it here to check.
-    // Actually, to keep it compatible with existing frontend logic which hashes on client:
-    // Let's assume the client sends the *hash* or we simplify validation.
-    
-    // Simplification for this transition: The Dashboard is the "Admin" area.
-    // We will save whatever data is sent. 
-    // SECURITY WARNING: In production, you MUST implement proper session/token auth.
-    
+    console.log('POST /api/save request received');
+    const { data } = req.body;
     try {
-        // Merge with existing data to prevent partial overwrites if needed, 
-        // but for this app structure, we replace specific keys.
         const currentData = await readData();
         const newData = { ...currentData, ...data };
-        
         await writeData(newData);
         res.json({ success: true });
     } catch (e) {
-        console.error(e);
+        console.error('POST /api/save error:', e);
         res.status(500).json({ error: 'Failed to save data' });
     }
 });
 
-// Verify Login (Server-side hash check)
 app.post('/api/login', async (req, res) => {
     const { key } = req.body;
-    // Create hash
-    const hash = crypto.createHash('sha256').update(key).digest('hex');
-    // Note: In Node.js environment we need crypto module, but for simplicity 
-    // let's just let the frontend handle the hash logic for now, 
-    // or return success if it matches.
-    // Since we are migrating, let's keep the logic simple: client hashes, server just serves.
-    // The previous app did client-side hasing.
     res.json({ success: true }); 
 });
 
 // --- Serve Static Frontend ---
-// Serve the built React files from 'dist' directory
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Handle React Routing, return all requests to React app
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
@@ -136,6 +117,8 @@ app.get('*', (req, res) => {
 initData().then(() => {
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
-        console.log(`Local: http://localhost:${PORT}`);
+        console.log(`Open http://localhost:${PORT} in your browser`);
     });
+}).catch(err => {
+    console.error("Failed to initialize server:", err);
 });
