@@ -175,11 +175,10 @@ const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: 
                         </div>
                     </div>
                     <div className="md:text-right">
-                        <h4 className="font-serif font-bold text-zine-blue mb-4">Electric Wave.</h4>
+                        <h4 className="font-serif font-bold text-zine-blue mb-4">电波FM.</h4>
                         <p className="text-xs text-gray-400 leading-relaxed max-w-xs ml-auto">
-                            © {new Date().getFullYear()} {siteConfig.siteName}. <br/>
-                            Built with React & Gemini AI. <br/>
-                            Designed for SillyTavern Community.
+                            © {new Date().getFullYear()} 电波系. <br/>
+                            一个温暖的自给自足的小世界. <br/>
                         </p>
                     </div>
                 </div>
