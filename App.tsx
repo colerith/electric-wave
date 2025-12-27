@@ -107,7 +107,7 @@ const Header: React.FC<{ isAdmin: boolean; onLoginClick: () => void; onLogout: (
   );
 };
 
-const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean }> = ({ links, isAdmin }) => {
+const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: number }> = ({ links, isAdmin }) => {
     return (
         <footer className="bg-white border-t border-gray-100 py-12 mt-auto">
             <div className="max-w-7xl mx-auto px-6">
@@ -565,4 +565,4 @@ const App: React.FC = () => {
   );
 };
 
-export default App;
+export { App };
