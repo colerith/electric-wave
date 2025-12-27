@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, Link } from 'react-router-dom';
-import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar } from 'lucide-react';
+import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Post, INITIAL_POSTS, INITIAL_LINKS, FriendlyLink, EditorState, ViewMode, Announcement, INITIAL_ANNOUNCEMENTS, DEFAULT_CATEGORIES, SiteConfig, DEFAULT_SITE_CONFIG } from './types';
@@ -10,7 +10,18 @@ import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
 
 // --- Security Helper ---
+// SHA-256 hash for 'fishy0517home'. 
 const ADMIN_HASH = "14620c325c044b76c8c084605e54d89069d72115162a5b678f2e293a3889021e";
+
+// Storage Keys
+const KEYS = {
+  POSTS: 'ew_posts',
+  CATEGORIES: 'ew_categories',
+  ANNOUNCEMENTS: 'ew_announcements',
+  LINKS: 'ew_links',
+  CONFIG: 'ew_site_config',
+  ADMIN: 'ew_admin_logged_in'
+};
 
 async function digestMessage(message: string) {
   const msgUint8 = new TextEncoder().encode(message);
@@ -18,6 +29,17 @@ async function digestMessage(message: string) {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   return hashHex;
+}
+
+// Helper to load from storage or fallback to default
+function loadState<T>(key: string, fallback: T): T {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : fallback;
+  } catch (e) {
+    console.warn(`Failed to load ${key} from storage`, e);
+    return fallback;
+  }
 }
 
 // --- Shared Components ---
@@ -219,6 +241,25 @@ const Dashboard: React.FC<{
     const [newLink, setNewLink] = useState({ title: '', url: '' });
     const [newAnnouncement, setNewAnnouncement] = useState('');
 
+    const handleExportData = () => {
+        const data = {
+            posts,
+            categories,
+            announcements,
+            links,
+            siteConfig
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     // Helpers for sorting
     const moveItem = <T,>(arr: T[], index: number, direction: 'up' | 'down'): T[] => {
         const newArr = [...arr];
@@ -376,6 +417,15 @@ const Dashboard: React.FC<{
                                         className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 shadow-sm" 
                                     />
                                     <p className="mt-2 text-xs text-gray-400">用于计算页脚显示的“运行天数”。</p>
+                                </div>
+                                <div className="pt-6 border-t border-gray-200">
+                                    <label className="block text-sm font-bold text-zine-blue mb-4 uppercase tracking-wider">数据维护</label>
+                                    <Button onClick={handleExportData} icon={<Download size={16} />} variant="secondary" className="w-full">
+                                        导出全站数据 (备份)
+                                    </Button>
+                                    <p className="mt-3 text-xs text-gray-400 leading-relaxed">
+                                        由于这是静态网站，你在后台的修改只会保存在当前浏览器中。若要永久修改（或在其他设备同步），请导出数据，并将 JSON 内容更新到代码仓库中。
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -546,17 +596,26 @@ const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean
 };
 
 const App: React.FC = () => {
-  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
-  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
-  const [announcements, setAnnouncements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
-  const [links, setLinks] = useState<FriendlyLink[]>(INITIAL_LINKS);
-  const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
-  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem('admin_logged_in') === 'true');
+  // Initialize state from LocalStorage or defaults
+  const [posts, setPosts] = useState<Post[]>(() => loadState(KEYS.POSTS, INITIAL_POSTS));
+  const [categories, setCategories] = useState<string[]>(() => loadState(KEYS.CATEGORIES, DEFAULT_CATEGORIES));
+  const [announcements, setAnnouncements] = useState<Announcement[]>(() => loadState(KEYS.ANNOUNCEMENTS, INITIAL_ANNOUNCEMENTS));
+  const [links, setLinks] = useState<FriendlyLink[]>(() => loadState(KEYS.LINKS, INITIAL_LINKS));
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => loadState(KEYS.CONFIG, DEFAULT_SITE_CONFIG));
+  
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem(KEYS.ADMIN) === 'true');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
   const [searchQuery, setSearchQuery] = useState('');
   const [hitokoto, setHitokoto] = useState<{ text: string; from: string } | null>(null);
-  const [visitorCount, setVisitorCount] = useState(0); // Kept for type compatibility but not used for display
+  const [visitorCount, setVisitorCount] = useState(0); 
+
+  // Persistence Effects
+  useEffect(() => localStorage.setItem(KEYS.POSTS, JSON.stringify(posts)), [posts]);
+  useEffect(() => localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(categories)), [categories]);
+  useEffect(() => localStorage.setItem(KEYS.ANNOUNCEMENTS, JSON.stringify(announcements)), [announcements]);
+  useEffect(() => localStorage.setItem(KEYS.LINKS, JSON.stringify(links)), [links]);
+  useEffect(() => localStorage.setItem(KEYS.CONFIG, JSON.stringify(siteConfig)), [siteConfig]);
 
   const allUsedTags = useMemo(() => {
     const tags = new Set<string>();
@@ -582,7 +641,7 @@ const App: React.FC = () => {
       const hash = await digestMessage(key);
       if (hash === ADMIN_HASH) {
         setIsAdmin(true);
-        localStorage.setItem('admin_logged_in', 'true');
+        localStorage.setItem(KEYS.ADMIN, 'true');
         setIsLoginModalOpen(false);
       } else {
         alert("密钥错误");
@@ -603,7 +662,7 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="min-h-screen bg-white text-gray-800 flex flex-col">
-        <Header isAdmin={isAdmin} onLoginClick={() => setIsLoginModalOpen(true)} onLogout={() => { setIsAdmin(false); localStorage.removeItem('admin_logged_in'); }} onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })} searchQuery={searchQuery} setSearchQuery={setSearchQuery} siteConfig={siteConfig} />
+        <Header isAdmin={isAdmin} onLoginClick={() => setIsLoginModalOpen(true)} onLogout={() => { setIsAdmin(false); localStorage.removeItem(KEYS.ADMIN); }} onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })} searchQuery={searchQuery} setSearchQuery={setSearchQuery} siteConfig={siteConfig} />
         <Routes>
           <Route path="/" element={<HomePage posts={filteredPosts} categories={categories} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDelete={id => setPosts(posts.filter(p => p.id !== id))} visitorCount={visitorCount} hitokoto={hitokoto} announcements={announcements} siteConfig={siteConfig} />} />
           <Route path="/post/:id" element={<PostDetail posts={posts} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} />} />
