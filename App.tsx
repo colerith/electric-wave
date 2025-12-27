@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { HashRouter, Routes, Route, useNavigate, useParams, Link } from 'react-router-dom';
-import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save } from 'lucide-react';
+import { HashRouter, Routes, Route, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
+import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Post, INITIAL_POSTS, INITIAL_LINKS, FriendlyLink, EditorState, ViewMode, Announcement, INITIAL_ANNOUNCEMENTS, DEFAULT_CATEGORIES, SiteConfig, DEFAULT_SITE_CONFIG } from './types';
@@ -10,7 +10,7 @@ import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
 
 // --- Security Helper ---
-const ADMIN_HASH = "72d5ca73780ebff2deba2ce5899c86a5582514b9e56760e36ef56a68219a5171";
+const ADMIN_HASH = "14620c325c044b76c8c084605e54d89069d72115162a5b678f2e293a3889021e";
 
 // Storage Keys
 const KEYS = {
@@ -19,7 +19,8 @@ const KEYS = {
   ANNOUNCEMENTS: 'ew_announcements',
   LINKS: 'ew_links',
   CONFIG: 'ew_site_config',
-  ADMIN: 'ew_admin_logged_in'
+  ADMIN: 'ew_admin_logged_in',
+  THEME: 'ew_theme_mode'
 };
 
 async function digestMessage(message: string) {
@@ -52,11 +53,153 @@ const ScrollToTop = () => {
   }, []);
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   return (
-    <button onClick={scrollToTop} className={`fixed bottom-10 right-10 z-40 p-3 bg-white text-zine-blue border border-gray-200 shadow-soft rounded-full transition-all duration-500 hover:scale-110 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
+    <button onClick={scrollToTop} className={`fixed bottom-10 right-10 z-40 p-3 bg-white dark:bg-slate-700 text-zine-blue dark:text-white border border-gray-200 dark:border-gray-600 shadow-soft rounded-full transition-all duration-500 hover:scale-110 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
       <ArrowUp size={20} strokeWidth={1} />
     </button>
   );
 };
+
+// --- ECG Visualizer Component ---
+const ECGVisualizer: React.FC = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // === 配置区域 ===
+  // 扫描速度
+  const SPEED = 4; 
+  // 线条透明度配置 (0.0 - 1.0)
+  const OPACITY_CONFIG = {
+    dark: 0.5,   // 暗色模式下的线条不透明度
+    light: 0.3  // 亮色模式下的线条不透明度
+  };
+  // === 配置结束 ===
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    let x = 0;
+    
+    // Resize handler
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = canvas.offsetHeight;
+      x = 0;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Heartbeat State Machine
+    let state = 'flat'; // States: flat, p, q, r, s, t
+    let stateStep = 0;
+    let nextBeatDistance = Math.random() * 200 + 100; // Random distance until next beat
+
+    // Re-implementing draw with better state tracking for line continuity
+    let prevY = canvas.height / 2;
+
+    const animate = () => {
+       const w = canvas.width;
+       const h = canvas.height;
+       const baseline = h / 2;
+       const amplitude = 50;
+
+       // Theme update check (inefficient to do every frame but robust for toggle)
+       const isDark = document.documentElement.classList.contains('dark');
+       
+       // Dynamic Style based on config
+       const opacity = isDark ? OPACITY_CONFIG.dark : OPACITY_CONFIG.light;
+       ctx.strokeStyle = isDark ? `rgba(96, 165, 250, ${opacity})` : `rgba(27, 60, 115, ${opacity})`;
+       ctx.shadowColor = isDark ? `rgba(96, 165, 250, ${opacity * 0.5})` : `rgba(27, 60, 115, ${opacity * 0.5})`;
+       
+       ctx.lineWidth = 2;
+       ctx.lineJoin = 'round';
+       ctx.lineCap = 'round';
+       ctx.shadowBlur = 4;
+
+       // Eraser
+       ctx.clearRect(x, 0, 40, h); // Clear ahead
+
+       ctx.beginPath();
+       ctx.moveTo(x, prevY);
+
+       x += SPEED;
+       
+       // Loop x
+       if (x > w) {
+           x = 0;
+           ctx.moveTo(0, baseline);
+           prevY = baseline; // Reset
+       }
+
+       // Calculate Y based on state
+       let y = baseline;
+
+       if (state === 'flat') {
+           // Add some noise
+           y = baseline + (Math.random() - 0.5) * 4;
+           nextBeatDistance -= SPEED;
+           if (nextBeatDistance <= 0) {
+               state = 'p';
+               stateStep = 0;
+           }
+       } else if (state === 'p') {
+           // P wave: small bump up
+           y = baseline - Math.sin(stateStep * Math.PI) * 10;
+           stateStep += 0.15;
+           if (stateStep >= 1) { state = 'wait_q'; stateStep = 0; y = baseline; }
+       } else if (state === 'wait_q') {
+           y = baseline;
+           stateStep += 0.3;
+           if (stateStep >= 1) { state = 'q'; stateStep = 0; }
+       } else if (state === 'q') {
+           // Q: slight dip
+           y = baseline + 10;
+           state = 'r';
+       } else if (state === 'r') {
+           // R: Big spike up
+           y = baseline - amplitude;
+           state = 's';
+       } else if (state === 's') {
+           // S: Dip down
+           y = baseline + 15;
+           state = 'wait_t';
+       } else if (state === 'wait_t') {
+           y = baseline; 
+           stateStep += 0.2;
+           if (stateStep >= 1) { state = 't'; stateStep = 0; }
+       } else if (state === 't') {
+           // T wave: medium bump
+           y = baseline - Math.sin(stateStep * Math.PI) * 15;
+           stateStep += 0.1;
+           if (stateStep >= 1) { 
+               state = 'flat'; 
+               stateStep = 0; 
+               y = baseline;
+               nextBeatDistance = Math.random() * 400 + 100; // Reset timer
+           }
+       }
+
+       ctx.lineTo(x, y);
+       ctx.stroke();
+       prevY = y;
+
+       animationFrameId = requestAnimationFrame(animate);
+    }
+
+    animate();
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} className="w-full h-full block" />;
+};
+
 
 const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (key: string) => void }> = ({ isOpen, onClose, onLogin }) => {
   const [key, setKey] = useState('');
@@ -74,16 +217,16 @@ const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (key
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-8 flex flex-col items-center">
+      <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-8 flex flex-col items-center">
         <div className="w-16 h-16 bg-zine-blue text-white rounded-full flex items-center justify-center mb-6 shadow-lg"><Github size={32} /></div>
-        <h2 className="text-xl font-serif font-bold text-zine-blue mb-2">管理权认证</h2>
+        <h2 className="text-xl font-serif font-bold text-zine-blue dark:text-white mb-2">管理权认证</h2>
         <div className="w-full space-y-4">
           <input 
             type="password" 
             value={key} 
             onChange={(e) => setKey(e.target.value)} 
             placeholder="输入管理密钥..." 
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none text-center" 
+            className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-900 border border-gray-100 dark:border-gray-700 rounded-xl outline-none text-center dark:text-white" 
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} 
           />
           <Button onClick={handleSubmit} className="w-full !py-3 !rounded-xl" disabled={isLoading}>
@@ -96,23 +239,28 @@ const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (key
   );
 };
 
-const Header: React.FC<{ isAdmin: boolean; onLoginClick: () => void; onLogout: () => void; onNewPost: () => void; searchQuery: string; setSearchQuery: (q: string) => void; siteConfig: SiteConfig; }> = ({ isAdmin, onLoginClick, onLogout, onNewPost, searchQuery, setSearchQuery, siteConfig }) => {
+const Header: React.FC<{ isAdmin: boolean; isDark: boolean; toggleTheme: () => void; onLoginClick: () => void; onLogout: () => void; onNewPost: () => void; searchQuery: string; setSearchQuery: (q: string) => void; siteConfig: SiteConfig; }> = ({ isAdmin, isDark, toggleTheme, onLoginClick, onLogout, onNewPost, searchQuery, setSearchQuery, siteConfig }) => {
   return (
-    <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 h-20">
+    <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 h-20 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between gap-8">
         <Link to="/" className="group flex flex-col justify-center">
-          <h1 className="text-2xl font-serif font-black text-zine-blue">{siteConfig.siteName}<span className="text-zine-pink">.</span></h1>
-          <span className="text-[10px] uppercase tracking-[0.3em] text-gray-400 group-hover:text-zine-blue transition-colors">Electric Wave</span>
+          <h1 className="text-2xl font-serif font-black text-zine-blue dark:text-white transition-colors">{siteConfig.siteName}<span className="text-zine-pink">.</span></h1>
+          <span className="text-[10px] uppercase tracking-[0.3em] text-gray-400 group-hover:text-zine-blue dark:group-hover:text-zine-pink transition-colors">Electric Wave</span>
         </Link>
         <div className="flex-1 max-w-sm relative hidden sm:block">
-          <input type="text" placeholder="搜索频道..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-4 py-1.5 border-b border-gray-300 bg-transparent focus:border-zine-blue outline-none text-sm font-serif" />
+          <input type="text" placeholder="搜索频道..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-4 py-1.5 border-b border-gray-300 dark:border-gray-700 bg-transparent focus:border-zine-blue dark:focus:border-zine-pink outline-none text-sm font-serif dark:text-gray-200" />
           <Search className="absolute left-0 top-1.5 text-gray-400" size={16} />
         </div>
         <div className="flex items-center gap-6">
-          <a href="https://github.com/Colerith/electric-wave" target="_blank" rel="noopener noreferrer" className="opacity-60 hover:opacity-100 transition-opacity text-zine-blue">
+          {/* Theme Toggle */}
+          <button onClick={toggleTheme} className="text-gray-400 hover:text-zine-blue dark:hover:text-yellow-300 transition-colors">
+            {isDark ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          
+          <a href="https://github.com/Colerith/electric-wave" target="_blank" rel="noopener noreferrer" className="opacity-60 hover:opacity-100 transition-opacity text-zine-blue dark:text-white">
             <Github size={20} strokeWidth={1.5} />
           </a>
-          <div className="h-6 w-px bg-gray-200"></div>
+          <div className="h-6 w-px bg-gray-200 dark:bg-gray-700"></div>
           {isAdmin ? (
             <div className="flex items-center gap-4">
               <Link to="/dashboard" className="w-9 h-9 rounded-full overflow-hidden border-2 border-zine-pink"><img src={siteConfig.avatarUrl} className="w-full h-full object-cover" alt="admin" /></Link>
@@ -120,7 +268,7 @@ const Header: React.FC<{ isAdmin: boolean; onLoginClick: () => void; onLogout: (
               <Button onClick={onNewPost} variant="primary" icon={<Plus size={16} />} className="!py-1.5 !px-4 !text-xs !rounded-full">发布</Button>
             </div>
           ) : (
-            <button onClick={onLoginClick} className="text-xs font-bold text-gray-400 hover:text-zine-blue flex items-center gap-2"><LogIn size={14} /> 登录</button>
+            <button onClick={onLoginClick} className="text-xs font-bold text-gray-400 hover:text-zine-blue dark:hover:text-white flex items-center gap-2"><LogIn size={14} /> 登录</button>
           )}
         </div>
       </div>
@@ -138,53 +286,54 @@ const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: 
     }, [siteConfig.startDate]);
 
     return (
-        <footer className="bg-white border-t border-gray-100 py-12 mt-auto">
+        <footer className="bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-gray-800 py-12 mt-auto transition-colors duration-300">
             <div className="max-w-7xl mx-auto px-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
                     <div>
-                        <h4 className="font-serif font-bold text-zine-blue mb-4 flex items-center gap-2"><Globe size={16}/> 站点统计</h4>
-                        <div className="space-y-2 text-sm text-gray-500 font-serif">
+                        <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4 flex items-center gap-2"><Globe size={16}/> 站点统计</h4>
+                        <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400 font-serif">
                              <div className="flex items-center gap-2">
                                 <BarChart3 size={14} className="text-zine-pink" />
                                 {/* Busuanzi Unique Visitor Counter */}
                                 <span id="busuanzi_container_site_uv" style={{ display: 'none' }}>
-                                    访客数: <span id="busuanzi_value_site_uv" className="font-bold text-zine-blue">--</span>
+                                    访客数: <span id="busuanzi_value_site_uv" className="font-bold text-zine-blue dark:text-white">--</span>
                                 </span>
                              </div>
                              <div>
                                  {/* Busuanzi Page View Counter */}
                                  <span id="busuanzi_container_site_pv" style={{ display: 'none' }}>
-                                    总浏览量: <span id="busuanzi_value_site_pv" className="font-bold text-zine-blue">--</span>
+                                    总浏览量: <span id="busuanzi_value_site_pv" className="font-bold text-zine-blue dark:text-white">--</span>
                                  </span>
                              </div>
                              <div className="flex items-center gap-2">
                                  <Calendar size={14} className="text-zine-pink" />
-                                 运行天数: <span className="font-bold text-zine-blue">{daysRunning > 0 ? daysRunning : 0} 天</span>
+                                 运行天数: <span className="font-bold text-zine-blue dark:text-white">{daysRunning > 0 ? daysRunning : 0} 天</span>
                              </div>
                         </div>
                     </div>
                     <div>
-                        <h4 className="font-serif font-bold text-zine-blue mb-4 flex items-center gap-2">
+                        <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4 flex items-center gap-2">
                             <LinkIcon size={16}/> 友情链接
                             {isAdmin && <Link to="/dashboard" className="text-xs text-gray-300 hover:text-zine-pink ml-2 font-normal underline">管理</Link>}
                         </h4>
                         <div className="flex flex-wrap gap-x-6 gap-y-2">
                             {links.map(link => (
-                                <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:text-zine-pink transition-colors font-serif border-b border-dashed border-gray-300 hover:border-zine-pink pb-0.5">{link.title}</a>
+                                <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:text-zine-pink dark:text-gray-400 dark:hover:text-zine-pink transition-colors font-serif border-b border-dashed border-gray-300 dark:border-gray-700 hover:border-zine-pink pb-0.5">{link.title}</a>
                             ))}
                         </div>
                     </div>
                     <div className="md:text-right">
-                        <h4 className="font-serif font-bold text-zine-blue mb-4">电波FM.</h4>
-                        <p className="text-xs text-gray-400 leading-relaxed max-w-xs ml-auto">
-                            © {new Date().getFullYear()} 电波系. <br/>
+                        <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4">Electric Wave.</h4>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed max-w-xs ml-auto">
+                            {/* 修改页脚版权文字区域 */}
+                           © {new Date().getFullYear()} 电波系. <br/>
                             一个温暖的自给自足的小世界. <br/>
                         </p>
                     </div>
                 </div>
                 <div className="text-center">
-                     <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-6"></div>
-                     <p className="text-[10px] text-gray-300 uppercase tracking-widest">End of Transmission</p>
+                     <div className="w-full h-px bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-800 to-transparent mb-6"></div>
+                     <p className="text-[10px] text-gray-300 dark:text-gray-600 uppercase tracking-widest">End of Transmission</p>
                 </div>
             </div>
         </footer>
@@ -203,10 +352,11 @@ const AnnouncementGallery: React.FC<{ announcements: Announcement[] }> = ({ anno
     return (
         <section className="mb-20">
             <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400 mb-6 flex items-center gap-2"><Megaphone size={14} className="text-zine-pink"/> 公告板</h3>
-            <div className="relative bg-white border border-gray-100 shadow-soft rounded-2xl p-8 md:p-12 min-h-[280px] flex flex-col justify-center overflow-hidden">
+            <div className="relative bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 shadow-soft rounded-2xl p-8 md:p-12 min-h-[280px] flex flex-col justify-center overflow-hidden transition-colors">
                 {activeAnnouncements.map((ann, idx) => (
                     <div key={ann.id} className={`transition-all duration-700 absolute inset-0 p-8 flex flex-col justify-center ${idx === currentIndex ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-12 pointer-events-none'}`}>
-                        <div className="font-serif text-2xl md:text-3xl font-bold text-zine-blue leading-relaxed">{ann.content}</div>
+                        {/* Allow line breaks in announcement */}
+                        <div className="font-serif text-xl md:text-2xl font-bold text-zine-blue dark:text-gray-100 leading-relaxed whitespace-pre-wrap">{ann.content}</div>
                         <div className="mt-6 flex gap-2 items-center">
                             <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zine-pink/10 text-zine-pink"><Radio size={12} /></span>
                             <span className="text-xs font-bold uppercase tracking-widest text-gray-400">NEWS FLASH</span>
@@ -271,31 +421,31 @@ const Dashboard: React.FC<{
 
     return (
         <div className="max-w-7xl mx-auto px-6 py-12">
-            <div className="bg-white border border-gray-100 shadow-soft p-8 min-h-[600px] flex flex-col md:flex-row gap-8">
-                <div className="w-full md:w-64 md:border-r border-gray-100 md:pr-6 space-y-2 shrink-0">
-                    <h2 className="text-xl font-serif font-bold text-zine-blue mb-6">控制台</h2>
-                    <button onClick={() => setActiveTab('posts')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'posts' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>文章管理</button>
-                    <button onClick={() => setActiveTab('announcements')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'announcements' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>公告管理</button>
-                    <button onClick={() => setActiveTab('categories')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'categories' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>分区设置</button>
-                    <button onClick={() => setActiveTab('links')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'links' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>友链设置</button>
-                    <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'settings' ? 'bg-zine-blue/5 text-zine-blue font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>全局设置</button>
+            <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 shadow-soft p-8 min-h-[600px] flex flex-col md:flex-row gap-8 transition-colors">
+                <div className="w-full md:w-64 md:border-r border-gray-100 dark:border-gray-700 md:pr-6 space-y-2 shrink-0">
+                    <h2 className="text-xl font-serif font-bold text-zine-blue dark:text-white mb-6">控制台</h2>
+                    <button onClick={() => setActiveTab('posts')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'posts' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>文章管理</button>
+                    <button onClick={() => setActiveTab('announcements')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'announcements' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>公告管理</button>
+                    <button onClick={() => setActiveTab('categories')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'categories' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>分区设置</button>
+                    <button onClick={() => setActiveTab('links')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'links' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>友链设置</button>
+                    <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'settings' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>全局设置</button>
                 </div>
                 <div className="flex-1 overflow-x-auto">
                     {/* Posts Management */}
                     {activeTab === 'posts' && (
                         <table className="w-full text-left border-collapse min-w-[500px]">
-                            <thead className="text-xs uppercase text-gray-400 border-b border-gray-100"><tr><th className="py-4">标题</th><th className="py-4">日期</th><th className="py-4 text-right">操作</th></tr></thead>
+                            <thead className="text-xs uppercase text-gray-400 border-b border-gray-100 dark:border-gray-700"><tr><th className="py-4">标题</th><th className="py-4">日期</th><th className="py-4 text-right">操作</th></tr></thead>
                             <tbody>
                                 {posts.map(post => (
-                                    <tr key={post.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                                        <td className="py-4 font-serif font-bold text-zine-blue flex items-center gap-2">
+                                    <tr key={post.id} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                                        <td className="py-4 font-serif font-bold text-zine-blue dark:text-gray-200 flex items-center gap-2">
                                             {post.isPinned && <Pin size={12} className="text-zine-pink" fill="currentColor"/>}
                                             {post.title}
                                         </td>
                                         <td className="py-4 text-xs text-gray-400">{new Date(post.createdAt).toLocaleDateString()}</td>
                                         <td className="py-4 text-right">
                                             <div className="flex justify-end gap-3">
-                                              <button onClick={() => onEditPost(post)} className="text-gray-400 hover:text-zine-blue"><Edit3 size={16}/></button>
+                                              <button onClick={() => onEditPost(post)} className="text-gray-400 hover:text-zine-blue dark:hover:text-white"><Edit3 size={16}/></button>
                                               <button onClick={() => onDeletePost(post.id)} className="text-gray-400 hover:text-red-500"><Trash2 size={16}/></button>
                                             </div>
                                         </td>
@@ -308,21 +458,24 @@ const Dashboard: React.FC<{
                     {/* Announcements Management */}
                     {activeTab === 'announcements' && (
                         <div className="space-y-6">
-                            <div className="flex gap-2">
-                                <input value={newAnnouncement} onChange={e => setNewAnnouncement(e.target.value)} placeholder="发布新公告..." className="flex-1 px-4 py-2 border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-sm" />
-                                <Button onClick={() => { if(newAnnouncement) { onUpdateAnnouncements([...announcements, {id: crypto.randomUUID(), content: newAnnouncement, isActive: true}]); setNewAnnouncement(''); } }} className="!py-2">添加</Button>
+                            <div className="flex flex-col gap-2">
+                                {/* Use Textarea for Newlines */}
+                                <textarea value={newAnnouncement} onChange={e => setNewAnnouncement(e.target.value)} placeholder="发布新公告 (支持换行)..." className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 bg-transparent dark:text-white rounded-lg outline-none focus:border-zine-blue text-sm min-h-[100px]" />
+                                <div className="text-right">
+                                  <Button onClick={() => { if(newAnnouncement) { onUpdateAnnouncements([...announcements, {id: crypto.randomUUID(), content: newAnnouncement, isActive: true}]); setNewAnnouncement(''); } }} className="!py-2">添加</Button>
+                                </div>
                             </div>
                             <div className="space-y-2">
                                 {announcements.map((ann, idx) => (
-                                    <div key={ann.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg group">
-                                        <div className="flex flex-col gap-1 text-gray-400">
+                                    <div key={ann.id} className="flex items-start gap-4 p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg group">
+                                        <div className="flex flex-col gap-1 text-gray-400 mt-1">
                                             <button onClick={() => onUpdateAnnouncements(moveItem(announcements, idx, 'up'))} className="hover:text-zine-blue"><ArrowUp size={14}/></button>
                                             <button onClick={() => onUpdateAnnouncements(moveItem(announcements, idx, 'down'))} className="hover:text-zine-blue"><ArrowDown size={14}/></button>
                                         </div>
                                         <div className="flex-1">
-                                            <input value={ann.content} onChange={(e) => { const n = [...announcements]; n[idx].content = e.target.value; onUpdateAnnouncements(n); }} className="w-full bg-transparent outline-none font-serif text-zine-blue" />
+                                            <textarea value={ann.content} onChange={(e) => { const n = [...announcements]; n[idx].content = e.target.value; onUpdateAnnouncements(n); }} className="w-full bg-transparent outline-none font-serif text-zine-blue dark:text-gray-200 resize-none h-auto" rows={Math.max(2, ann.content.split('\n').length)} />
                                         </div>
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-3 mt-1">
                                             <button onClick={() => { const n = [...announcements]; n[idx].isActive = !n[idx].isActive; onUpdateAnnouncements(n); }} className={`${ann.isActive ? 'text-green-500' : 'text-gray-300'}`}><Eye size={16}/></button>
                                             <button onClick={() => onUpdateAnnouncements(announcements.filter(a => a.id !== ann.id))} className="text-gray-300 hover:text-red-500"><Trash2 size={16}/></button>
                                         </div>
@@ -336,13 +489,13 @@ const Dashboard: React.FC<{
                     {activeTab === 'categories' && (
                          <div className="space-y-6">
                             <div className="flex gap-2">
-                                <input value={newCategory} onChange={e => setNewCategory(e.target.value)} placeholder="新分区名称..." className="flex-1 px-4 py-2 border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-sm" />
+                                <input value={newCategory} onChange={e => setNewCategory(e.target.value)} placeholder="新分区名称..." className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 bg-transparent dark:text-white rounded-lg outline-none focus:border-zine-blue text-sm" />
                                 <Button onClick={() => { if(newCategory && !categories.includes(newCategory)) { onUpdateCategories([...categories, newCategory]); setNewCategory(''); } }} className="!py-2">添加</Button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {categories.map((cat, idx) => (
-                                    <div key={cat} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                        <span className="font-serif font-bold text-zine-blue">{cat}</span>
+                                    <div key={cat} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+                                        <span className="font-serif font-bold text-zine-blue dark:text-gray-200">{cat}</span>
                                         <div className="flex items-center gap-2">
                                              <button onClick={() => onUpdateCategories(moveItem(categories, idx, 'up'))} className="text-gray-300 hover:text-zine-blue"><ArrowUp size={14}/></button>
                                              <button onClick={() => onUpdateCategories(moveItem(categories, idx, 'down'))} className="text-gray-300 hover:text-zine-blue"><ArrowDown size={14}/></button>
@@ -358,20 +511,20 @@ const Dashboard: React.FC<{
                     {activeTab === 'links' && (
                          <div className="space-y-6">
                             <div className="flex gap-2 flex-col sm:flex-row">
-                                <input value={newLink.title} onChange={e => setNewLink({...newLink, title: e.target.value})} placeholder="网站名称" className="flex-1 px-4 py-2 border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-sm" />
-                                <input value={newLink.url} onChange={e => setNewLink({...newLink, url: e.target.value})} placeholder="URL (https://...)" className="flex-1 px-4 py-2 border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-sm" />
+                                <input value={newLink.title} onChange={e => setNewLink({...newLink, title: e.target.value})} placeholder="网站名称" className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 bg-transparent dark:text-white rounded-lg outline-none focus:border-zine-blue text-sm" />
+                                <input value={newLink.url} onChange={e => setNewLink({...newLink, url: e.target.value})} placeholder="URL (https://...)" className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 bg-transparent dark:text-white rounded-lg outline-none focus:border-zine-blue text-sm" />
                                 <Button onClick={() => { if(newLink.title && newLink.url) { onUpdateLinks([...links, {id: crypto.randomUUID(), ...newLink}]); setNewLink({title:'', url:''}); } }} className="!py-2">添加友链</Button>
                             </div>
                             <div className="space-y-2">
                                 {links.map((link, idx) => (
-                                    <div key={link.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                                    <div key={link.id} className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
                                         <div className="flex flex-col gap-1 text-gray-400">
                                             <button onClick={() => onUpdateLinks(moveItem(links, idx, 'up'))} className="hover:text-zine-blue"><ArrowUp size={14}/></button>
                                             <button onClick={() => onUpdateLinks(moveItem(links, idx, 'down'))} className="hover:text-zine-blue"><ArrowDown size={14}/></button>
                                         </div>
                                         <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            <input value={link.title} onChange={(e) => { const n = [...links]; n[idx].title = e.target.value; onUpdateLinks(n); }} className="w-full bg-transparent outline-none font-bold text-zine-blue" />
-                                            <input value={link.url} onChange={(e) => { const n = [...links]; n[idx].url = e.target.value; onUpdateLinks(n); }} className="w-full bg-transparent outline-none text-gray-500 text-sm" />
+                                            <input value={link.title} onChange={(e) => { const n = [...links]; n[idx].title = e.target.value; onUpdateLinks(n); }} className="w-full bg-transparent outline-none font-bold text-zine-blue dark:text-gray-200" />
+                                            <input value={link.url} onChange={(e) => { const n = [...links]; n[idx].url = e.target.value; onUpdateLinks(n); }} className="w-full bg-transparent outline-none text-gray-500 dark:text-gray-400 text-sm" />
                                         </div>
                                         <button onClick={() => onUpdateLinks(links.filter(l => l.id !== link.id))} className="text-gray-300 hover:text-red-500"><Trash2 size={16}/></button>
                                     </div>
@@ -383,41 +536,41 @@ const Dashboard: React.FC<{
                     {/* Global Settings */}
                     {activeTab === 'settings' && (
                         <div className="space-y-6 max-w-2xl animate-in fade-in duration-300">
-                            <div className="bg-gray-50 p-8 rounded-xl border border-gray-100 space-y-8">
+                            <div className="bg-gray-50 dark:bg-slate-700/30 p-8 rounded-xl border border-gray-100 dark:border-gray-700 space-y-8">
                                 <div>
-                                    <label className="block text-sm font-bold text-zine-blue mb-2 uppercase tracking-wider">站点名称</label>
+                                    <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-2 uppercase tracking-wider">站点名称</label>
                                     <input 
                                         value={siteConfig.siteName} 
                                         onChange={e => onUpdateSiteConfig({...siteConfig, siteName: e.target.value})} 
-                                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-base font-serif text-zine-blue shadow-sm" 
+                                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-base font-serif text-zine-blue dark:text-white shadow-sm" 
                                         placeholder="输入站点名称..."
                                     />
                                     <p className="mt-2 text-xs text-gray-400">显示在标题栏和页脚的品牌名称。</p>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-zine-blue mb-2 uppercase tracking-wider">头像链接 (URL)</label>
+                                    <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-2 uppercase tracking-wider">头像链接 (URL)</label>
                                     <div className="flex gap-4">
                                         <img src={siteConfig.avatarUrl} alt="Preview" className="w-12 h-12 rounded-full border border-gray-200 object-cover" />
                                         <input 
                                             value={siteConfig.avatarUrl} 
                                             onChange={e => onUpdateSiteConfig({...siteConfig, avatarUrl: e.target.value})} 
-                                            className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 shadow-sm" 
+                                            className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 dark:text-gray-300 shadow-sm" 
                                             placeholder="https://..."
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-zine-blue mb-2 uppercase tracking-wider">建站日期</label>
+                                    <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-2 uppercase tracking-wider">建站日期</label>
                                     <input 
                                         type="date"
                                         value={siteConfig.startDate} 
                                         onChange={e => onUpdateSiteConfig({...siteConfig, startDate: e.target.value})} 
-                                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 shadow-sm" 
+                                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 dark:text-gray-300 shadow-sm" 
                                     />
                                     <p className="mt-2 text-xs text-gray-400">用于计算页脚显示的“运行天数”。</p>
                                 </div>
-                                <div className="pt-6 border-t border-gray-200">
-                                    <label className="block text-sm font-bold text-zine-blue mb-4 uppercase tracking-wider">数据维护</label>
+                                <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
+                                    <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-4 uppercase tracking-wider">数据维护</label>
                                     <Button onClick={handleExportData} icon={<Download size={16} />} variant="secondary" className="w-full">
                                         导出全站数据 (备份)
                                     </Button>
@@ -434,20 +587,41 @@ const Dashboard: React.FC<{
     );
 };
 
+// Helper for TOC Slugs
+const slugify = (text: string) => {
+  return text.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-').replace(/(^-|-$)+/g, '');
+};
+
 const TableOfContents: React.FC<{ content: string }> = ({ content }) => {
   const headings = content.match(/^(#{1,3})\s+(.*)$/gm);
   if (!headings || headings.length === 0) return null;
+
+  const handleScroll = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      // Offset for sticky header
+      const y = element.getBoundingClientRect().top + window.scrollY - 100;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="hidden lg:block w-64 shrink-0">
       <div className="sticky top-32">
-        <h4 className="font-serif font-bold text-zine-blue mb-4 text-sm uppercase tracking-widest">目录</h4>
-        <ul className="space-y-3 relative border-l border-gray-200 ml-1">
+        <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4 text-sm uppercase tracking-widest">目录</h4>
+        <ul className="space-y-3 relative border-l border-gray-200 dark:border-gray-700 ml-1">
           {headings.map((heading, index) => {
             const level = heading.match(/^#+/)?.[0].length || 1;
             const text = heading.replace(/^#+\s+/, '');
+            const id = slugify(text) + '-' + index;
             return (
-              <li key={index} style={{ paddingLeft: `${(level) * 12}px` }} className="relative">
-                <span className="block text-sm text-gray-500 hover:text-zine-pink transition-colors font-serif leading-tight cursor-default">{text}</span>
+              <li key={index} style={{ paddingLeft: `${(level) * 12}px` }} className="relative group">
+                <button 
+                  onClick={() => handleScroll(id)}
+                  className="block text-left text-sm text-gray-500 dark:text-gray-400 hover:text-zine-pink dark:hover:text-zine-pink transition-colors font-serif leading-tight"
+                >
+                    {text}
+                </button>
               </li>
             );
           })}
@@ -473,40 +647,109 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
     );
   }
 
+  const hasCover = post.coverImage && post.coverImage.trim() !== '';
+
+  // Custom heading renderer to inject IDs for TOC
+  const HeadingRenderer = (level: number) => ({ children }: any) => {
+    const text = String(children);
+    const Tag = `h${level}` as React.ElementType;
+    const id = slugify(text);
+    return <Tag id={id}>{children}</Tag>;
+  };
+  
+  // Revised Strategy: Since we can't easily sync indices between TOC parser (RegEx) and ReactMarkdown renderer,
+  // we will use pure text slugs. If duplicate headings exist, they collide. Acceptable for simple blog.
+  const components = {
+      h1: HeadingRenderer(1),
+      h2: HeadingRenderer(2),
+      h3: HeadingRenderer(3),
+      h4: HeadingRenderer(4),
+      h5: HeadingRenderer(5),
+      h6: HeadingRenderer(6),
+  };
+
+  // Re-write TOC to match the ID strategy above (pure text slug)
+  const SimpleTableOfContents: React.FC<{ content: string }> = ({ content }) => {
+     const headings = content.match(/^(#{1,3})\s+(.*)$/gm);
+     if (!headings || headings.length === 0) return null;
+     
+     return (
+        <div className="hidden lg:block w-64 shrink-0">
+          <div className="sticky top-32">
+            <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4 text-sm uppercase tracking-widest">目录</h4>
+            <ul className="space-y-3 relative border-l border-gray-200 dark:border-gray-700 ml-1">
+              {headings.map((heading, index) => {
+                const text = heading.replace(/^#+\s+/, '');
+                const id = slugify(text);
+                return (
+                  <li key={index} className="relative pl-3">
+                    <button onClick={() => {
+                        const el = document.getElementById(id);
+                        if(el) { const y = el.getBoundingClientRect().top + window.scrollY - 100; window.scrollTo({top:y, behavior:'smooth'}); }
+                    }} className="block text-left text-sm text-gray-500 dark:text-gray-400 hover:text-zine-pink transition-colors font-serif leading-tight">
+                        {text}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+     );
+  };
+
   return (
-    <article className="min-h-screen bg-white pb-20 animate-in fade-in duration-500">
-        {/* Header Area with Image and Gradient Mask */}
-        <div className="relative h-[60vh] w-full overflow-hidden group">
-            <img 
-                src={post.coverImage} 
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
-                alt={post.title} 
-            />
-            {/* Dark Gradient Mask for Text Readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
-            
-            <div className="absolute bottom-0 left-0 w-full z-30 p-6 md:p-12 max-w-7xl mx-auto flex flex-col items-start gap-4">
-                <button onClick={() => navigate(-1)} className="p-2 bg-white/10 backdrop-blur-md rounded-full text-white mb-2 hover:bg-white hover:text-zine-blue transition-colors group">
-                    <ChevronLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
-                </button>
-                <div className="flex gap-3">
-                   <span className="bg-zine-blue/80 backdrop-blur-md text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-white/10">{post.category}</span>
-                   {post.isPinned && <span className="bg-zine-pink/90 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1 border border-white/10"><Pin size={10} fill="currentColor"/> Featured</span>}
-                </div>
-                <h1 className="text-4xl md:text-6xl font-serif font-black text-white leading-tight drop-shadow-lg shadow-black/20">{post.title}</h1>
-                <div className="text-white/90 font-serif italic text-lg flex items-center gap-2">
-                     <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                     <span className="w-1 h-1 bg-white/50 rounded-full"></span>
-                     <span>by {post.author}</span>
+    <article className="min-h-screen bg-white dark:bg-dark-bg pb-20 animate-in fade-in duration-500 transition-colors">
+        {/* Header Area */}
+        {hasCover ? (
+             <div className="relative h-[60vh] w-full overflow-hidden group">
+                <img 
+                    src={post.coverImage} 
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
+                    alt={post.title} 
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
+                
+                <div className="absolute bottom-0 left-0 w-full z-30 p-6 md:p-12 max-w-7xl mx-auto flex flex-col items-start gap-4">
+                    <button onClick={() => navigate(-1)} className="p-2 bg-white/10 backdrop-blur-md rounded-full text-white mb-2 hover:bg-white hover:text-zine-blue transition-colors group">
+                        <ChevronLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
+                    </button>
+                    <div className="flex gap-3">
+                    <span className="bg-zine-blue/80 backdrop-blur-md text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-white/10">{post.category}</span>
+                    {post.isPinned && <span className="bg-zine-pink/90 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1 border border-white/10"><Pin size={10} fill="currentColor"/> Featured</span>}
+                    </div>
+                    <h1 className="text-4xl md:text-6xl font-serif font-black text-white leading-tight drop-shadow-lg shadow-black/20">{post.title}</h1>
+                    <div className="text-white/90 font-serif italic text-lg flex items-center gap-2">
+                        <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                        <span className="w-1 h-1 bg-white/50 rounded-full"></span>
+                        <span>by {post.author}</span>
+                    </div>
                 </div>
             </div>
-        </div>
+        ) : (
+            /* No Image Header */
+            <div className="pt-32 pb-12 px-6 max-w-7xl mx-auto">
+                 <button onClick={() => navigate(-1)} className="p-2 bg-gray-100 dark:bg-slate-800 text-gray-500 rounded-full mb-6 hover:bg-zine-blue hover:text-white transition-colors group inline-flex">
+                        <ChevronLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
+                 </button>
+                 <div className="flex gap-3 mb-4">
+                    <span className="bg-zine-blue/10 dark:bg-blue-900/30 text-zine-blue dark:text-blue-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">{post.category}</span>
+                    {post.isPinned && <span className="bg-zine-pink/10 text-zine-pink px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1"><Pin size={10} fill="currentColor"/> Featured</span>}
+                 </div>
+                 <h1 className="text-4xl md:text-6xl font-serif font-black text-zine-blue dark:text-white leading-tight mb-6">{post.title}</h1>
+                 <div className="text-gray-500 dark:text-gray-400 font-serif italic text-lg flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-8">
+                        <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                        <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                        <span>by {post.author}</span>
+                 </div>
+            </div>
+        )}
         
         <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
-            <div className="lg:col-span-3 hidden lg:block"><TableOfContents content={post.content} /></div>
+            <div className="lg:col-span-3 hidden lg:block"><SimpleTableOfContents content={post.content} /></div>
             <div className="lg:col-span-8 lg:col-start-4">
-                 <div className="prose prose-lg prose-zinc max-w-none font-serif leading-loose">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
+                 <div className="prose prose-lg prose-zinc dark:prose-invert max-w-none font-sans font-medium leading-loose">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{post.content}</ReactMarkdown>
                  </div>
             </div>
         </div>
@@ -523,15 +766,23 @@ const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean
   const regularPosts = filteredPostsByCat.filter(p => !p.isPinned);
 
   return (
-    <main className="max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1">
-        <section className="mb-24 flex flex-col md:flex-row items-start md:items-end justify-between border-b border-zine-blue/10 pb-16">
-            <div className="max-w-4xl flex-1">
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zine-blue/5 text-zine-blue text-xs font-bold mb-8 border border-zine-blue/10">今日电波</span>
-                <h2 className="text-xl md:text-3xl font-serif font-black text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue py-3">“{hitokoto ? hitokoto.text : '正在接收电波...'}”</h2>
-                <p className="text-lg text-gray-500 font-serif italic">—— {hitokoto ? hitokoto.from : '...'}</p>
+    <main className="max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1 relative z-10">
+        <section className="mb-24 flex flex-col md:flex-row items-start md:items-end justify-between border-b border-zine-blue/10 dark:border-gray-700 pb-16 relative min-h-[400px]">
+            
+            {/* Full Width ECG Visualizer Container - Positioned higher to clear text */}
+            {/* 调整 opacity-30 来修改整体透明度 */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-screen h-[250px] -z-10 overflow-hidden pointer-events-none opacity-30">
+                <ECGVisualizer />
             </div>
-            <div className="text-right shrink-0 hidden md:block">
-                <div className="text-6xl font-serif font-light text-zine-blue/20">{posts.length}</div>
+
+            <div className="max-w-4xl flex-1 relative z-10 self-end">
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zine-blue/5 dark:bg-blue-900/20 text-zine-blue dark:text-blue-300 text-xs font-bold mb-8 border border-zine-blue/10 dark:border-blue-900/30">今日电波</span>
+                {/* Removed animate-pulse, kept gradient text */}
+                <h2 className="text-xl md:text-3xl font-serif font-black text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue dark:from-white dark:via-blue-300 dark:to-white py-3">“{hitokoto ? hitokoto.text : '正在接收电波...'}”</h2>
+                <p className="text-lg text-gray-500 dark:text-gray-400 font-serif italic">—— {hitokoto ? hitokoto.from : '...'}</p>
+            </div>
+            <div className="text-right shrink-0 hidden md:block self-end">
+                <div className="text-6xl font-serif font-light text-zine-blue/20 dark:text-white/10">{posts.length}</div>
                 <div className="text-xs text-gray-400">已收录条目</div>
             </div>
         </section>
@@ -539,10 +790,10 @@ const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean
         <AnnouncementGallery announcements={announcements} />
 
         {/* Category Filter */}
-        <div className="flex flex-wrap gap-2 mb-12 sticky top-20 z-30 bg-white/80 backdrop-blur-md py-4 -mx-6 px-6 md:mx-0 md:px-0 md:bg-transparent md:static">
+        <div className="flex flex-wrap gap-2 mb-12 sticky top-20 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md py-4 -mx-6 px-6 md:mx-0 md:px-0 md:bg-transparent md:static transition-colors">
              <button 
                 onClick={() => setSelectedCategory('All')}
-                className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${selectedCategory === 'All' ? 'bg-zine-blue text-white shadow-soft' : 'bg-white text-gray-500 hover:text-zine-blue border border-gray-100'}`}
+                className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${selectedCategory === 'All' ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
              >
                 全部
              </button>
@@ -550,7 +801,7 @@ const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean
                  <button 
                     key={cat}
                     onClick={() => setSelectedCategory(cat)}
-                    className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${selectedCategory === cat ? 'bg-zine-blue text-white shadow-soft' : 'bg-white text-gray-500 hover:text-zine-blue border border-gray-100'}`}
+                    className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${selectedCategory === cat ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
                  >
                     {cat}
                  </button>
@@ -565,9 +816,15 @@ const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                     {pinnedPosts.map(post => (
                         <div key={post.id} onClick={() => navigate(`/post/${post.id}`)} className="group cursor-pointer">
-                            <div className="aspect-[2/1] overflow-hidden rounded-sm mb-6 bg-gray-100 shadow-sm"><img src={post.coverImage} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" alt={post.title} /></div>
-                            <h4 className="text-3xl font-serif font-bold text-zine-blue group-hover:text-zine-pink transition-colors">{post.title}</h4>
-                            <p className="text-gray-500 font-serif line-clamp-2 mt-2">{post.excerpt}</p>
+                            <div className={`aspect-[2/1] overflow-hidden rounded-sm mb-6 bg-gray-100 dark:bg-slate-800 shadow-sm ${!post.coverImage && 'flex items-center justify-center bg-gradient-to-br from-zine-blue/5 to-zine-pink/5'}`}>
+                                {post.coverImage ? (
+                                    <img src={post.coverImage} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" alt={post.title} />
+                                ) : (
+                                    <span className="font-serif italic text-gray-300 dark:text-gray-600 text-2xl">Electric Wave</span>
+                                )}
+                            </div>
+                            <h4 className="text-3xl font-serif font-bold text-zine-blue dark:text-white group-hover:text-zine-pink transition-colors">{post.title}</h4>
+                            <p className="text-gray-500 dark:text-gray-400 font-serif line-clamp-2 mt-2">{post.excerpt}</p>
                         </div>
                     ))}
                 </div>
@@ -584,7 +841,7 @@ const HomePage: React.FC<{ posts: Post[]; categories: string[]; isAdmin: boolean
                     ))}
                 </div>
             ) : (
-                <div className="py-20 text-center text-gray-400 font-serif italic border border-dashed border-gray-200 rounded-2xl">
+                <div className="py-20 text-center text-gray-400 font-serif italic border border-dashed border-gray-200 dark:border-gray-700 rounded-2xl">
                     此分区暂无内容...
                 </div>
             )}
@@ -602,6 +859,8 @@ const App: React.FC = () => {
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => loadState(KEYS.CONFIG, DEFAULT_SITE_CONFIG));
   
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem(KEYS.ADMIN) === 'true');
+  const [isDark, setIsDark] = useState(() => loadState(KEYS.THEME, false)); // Dark mode state
+  
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
   const [searchQuery, setSearchQuery] = useState('');
@@ -614,6 +873,16 @@ const App: React.FC = () => {
   useEffect(() => localStorage.setItem(KEYS.ANNOUNCEMENTS, JSON.stringify(announcements)), [announcements]);
   useEffect(() => localStorage.setItem(KEYS.LINKS, JSON.stringify(links)), [links]);
   useEffect(() => localStorage.setItem(KEYS.CONFIG, JSON.stringify(siteConfig)), [siteConfig]);
+  
+  // Theme Effect
+  useEffect(() => {
+    localStorage.setItem(KEYS.THEME, JSON.stringify(isDark));
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDark]);
 
   const allUsedTags = useMemo(() => {
     const tags = new Set<string>();
@@ -659,8 +928,8 @@ const App: React.FC = () => {
 
   return (
     <HashRouter>
-      <div className="min-h-screen bg-white text-gray-800 flex flex-col">
-        <Header isAdmin={isAdmin} onLoginClick={() => setIsLoginModalOpen(true)} onLogout={() => { setIsAdmin(false); localStorage.removeItem(KEYS.ADMIN); }} onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })} searchQuery={searchQuery} setSearchQuery={setSearchQuery} siteConfig={siteConfig} />
+      <div className="min-h-screen bg-white dark:bg-dark-bg text-gray-800 dark:text-gray-200 flex flex-col transition-colors duration-300">
+        <Header isAdmin={isAdmin} isDark={isDark} toggleTheme={() => setIsDark(!isDark)} onLoginClick={() => setIsLoginModalOpen(true)} onLogout={() => { setIsAdmin(false); localStorage.removeItem(KEYS.ADMIN); }} onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })} searchQuery={searchQuery} setSearchQuery={setSearchQuery} siteConfig={siteConfig} />
         <Routes>
           <Route path="/" element={<HomePage posts={filteredPosts} categories={categories} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} onDelete={id => setPosts(posts.filter(p => p.id !== id))} visitorCount={visitorCount} hitokoto={hitokoto} announcements={announcements} siteConfig={siteConfig} />} />
           <Route path="/post/:id" element={<PostDetail posts={posts} isAdmin={isAdmin} onEdit={p => setEditor({ isOpen: true, mode: 'edit', currentPost: p })} />} />
