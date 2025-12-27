@@ -10,8 +10,7 @@ import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
 
 // --- Security Helper ---
-// SHA-256 hash for 'fishy0517home'. 
-const ADMIN_HASH = "14620c325c044b76c8c084605e54d89069d72115162a5b678f2e293a3889021e";
+const ADMIN_HASH = "72d5ca73780ebff2deba2ce5899c86a5582514b9e56760e36ef56a68219a5171";
 
 // Storage Keys
 const KEYS = {
