@@ -211,7 +211,7 @@ export const EditorModal: React.FC<EditorModalProps> = ({
                              <button onClick={() => insertMarkdown('[链接文字](url)')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="链接"><Link size={14}/></button>
                              <button onClick={() => insertMarkdown('```\n', '\n```')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="代码块"><Code size={14}/></button>
                              <button onClick={() => insertMarkdown('\n\n---\n\n')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="分割线"><Minus size={14}/></button>
-                             <button onClick={() => triggerUpload('content')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="上传图片"><ImageIcon size={14}/></button>
+                             <button onClick={() => triggerUpload('content')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="插入图片"><ImageIcon size={14}/></button>
                          </div>
                      )}
                   </div>
@@ -267,6 +267,7 @@ export const EditorModal: React.FC<EditorModalProps> = ({
                      />
                      <Button type="button" variant="secondary" onClick={() => triggerUpload('cover')} className="!px-3" title="上传本地图片">
                         <Upload size={14} />
+                        <span className="hidden sm:inline ml-1">上传</span>
                      </Button>
                  </div>
                  
