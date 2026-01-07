@@ -11,6 +11,7 @@ import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
 
 // --- Security Helper ---
+// SHA-256 hash for 'fishy0517home'. 
 const ADMIN_HASH = "72d5ca73780ebff2deba2ce5899c86a5582514b9e56760e36ef56a68219a5171";
 
 // Storage Keys
@@ -833,14 +834,15 @@ const HomeWithNavigation: React.FC<{
 
     return (
         <main className="max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1 relative z-10">
-            <section className="mb-24 flex flex-col md:flex-row items-start md:items-end justify-between border-b border-zine-blue/10 dark:border-gray-700 pb-16 relative min-h-[400px]">
+            <section className="mb-24 flex flex-col justify-between md:flex-row md:items-end md:justify-between border-b border-zine-blue/10 dark:border-gray-700 pb-16 md:relative min-h-[400px]">
                 
-                {/* Full Width ECG Visualizer Container */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-screen h-[250px] -z-10 overflow-hidden pointer-events-none opacity-30">
+                {/* ECG Visualizer: In-flow on mobile with smaller height, absolute on desktop */}
+                <div className="w-full h-[150px] -z-10 overflow-hidden pointer-events-none opacity-40 md:absolute md:top-0 md:left-1/2 md:-translate-x-1/2 md:w-screen md:h-[250px] md:opacity-30">
                     <ECGVisualizer />
                 </div>
 
-                <div className="max-w-4xl flex-1 relative z-10 self-end">
+                {/* Hitokoto Container: Pushed to bottom on mobile, self-end on desktop */}
+                <div className="max-w-4xl flex-1 relative z-10 w-full">
                     <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zine-blue/5 dark:bg-blue-900/20 text-zine-blue dark:text-blue-300 text-xs font-bold mb-8 border border-zine-blue/10 dark:border-blue-900/30">今日电波</span>
                     <h2 className="text-xl md:text-3xl font-serif font-black text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue dark:from-white dark:via-blue-300 dark:to-white py-3">
                         “{hitokoto ? hitokoto.text : '正在接收电波...'}”
@@ -849,7 +851,9 @@ const HomeWithNavigation: React.FC<{
                         —— {hitokoto ? hitokoto.from : '...'}
                     </p>
                 </div>
-                <div className="text-right shrink-0 hidden md:block self-end">
+                
+                {/* Post Count: Hidden on mobile */}
+                <div className="text-right shrink-0 hidden md:block">
                     <div className="text-6xl font-serif font-light text-zine-blue/20 dark:text-white/10">{posts.length}</div>
                     <div className="text-xs text-gray-400">已收录条目</div>
                 </div>
