@@ -1011,9 +1011,32 @@ export const App: React.FC = () => {
   useEffect(() => {
     const fetchHitokoto = async () => {
       try {
-        const res = await fetch('https://v1.hitokoto.cn/?c=d&c=h&c=k');
+        const res = await fetch('https://api.suyanw.cn/api/meiju?type=json');
         const data = await res.json();
-        setHitokoto({ text: data.hitokoto, from: data.from });
+        
+        let text = data.text || data.content || "正在接收电波...";
+        let author = data.from || data.source || data.author;
+
+        // 针对素颜API返回格式进行特殊处理：如果内容中包含 '——'，则手动分割
+        if (text.includes('——')) {
+            const parts = text.split('——');
+            if (parts.length >= 2) {
+                const lastPart = parts[parts.length - 1].trim();
+                // 简单的长度校验，防止误切
+                if (lastPart.length > 0 && lastPart.length < 20) {
+                    author = lastPart;
+                    text = parts.slice(0, -1).join('——').trim();
+                }
+            }
+        }
+        
+        // Remove surrounding quotes if present to avoid double quoting
+        text = text.replace(/^['"“](.*)['"”]$/, '$1');
+
+        setHitokoto({ 
+            text: text, 
+            from: author || "电波FM" 
+        });
       } catch (e) { setHitokoto({ text: "人类的悲欢并不相通。", from: "鲁迅" }); }
     };
     fetchHitokoto();
