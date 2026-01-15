@@ -261,33 +261,34 @@ const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (key
 const Header: React.FC<{ isAdmin: boolean; isDark: boolean; toggleTheme: () => void; onLoginClick: () => void; onLogout: () => void; onNewPost: () => void; searchQuery: string; setSearchQuery: (q: string) => void; siteConfig: SiteConfig; }> = ({ isAdmin, isDark, toggleTheme, onLoginClick, onLogout, onNewPost, searchQuery, setSearchQuery, siteConfig }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 h-20 transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between gap-8">
-        <Link to="/" className="group flex flex-col justify-center">
-          <h1 className="text-2xl font-serif font-black text-zine-blue dark:text-white transition-colors">{siteConfig.siteName}<span className="text-zine-pink">.</span></h1>
-          <span className="text-[10px] uppercase tracking-[0.3em] text-gray-400 group-hover:text-zine-blue dark:group-hover:text-zine-pink transition-colors">Electric Wave</span>
+      <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between gap-4 sm:gap-8">
+        <Link to="/" className="group flex flex-col justify-center shrink-0">
+          <h1 className="text-2xl font-serif font-black text-zine-blue dark:text-white transition-colors leading-none mb-1 whitespace-nowrap">{siteConfig.siteName}<span className="text-zine-pink">.</span></h1>
+          <span className="text-[10px] uppercase tracking-[0.15em] sm:tracking-[0.3em] text-gray-400 group-hover:text-zine-blue dark:group-hover:text-zine-pink transition-colors leading-none whitespace-nowrap">Electric Wave</span>
         </Link>
         <div className="flex-1 max-w-sm relative hidden sm:block">
           <input type="text" placeholder="搜索频道..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-8 pr-4 py-1.5 border-b border-gray-300 dark:border-gray-700 bg-transparent focus:border-zine-blue dark:focus:border-zine-pink outline-none text-sm font-serif dark:text-gray-200" />
           <Search className="absolute left-0 top-1.5 text-gray-400" size={16} />
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 sm:gap-6 shrink-0">
           {/* Theme Toggle */}
-          <button onClick={toggleTheme} className="text-gray-400 hover:text-zine-blue dark:hover:text-yellow-300 transition-colors">
+          <button onClick={toggleTheme} className="text-gray-400 hover:text-zine-blue dark:hover:text-yellow-300 transition-colors p-1">
             {isDark ? <Sun size={20} /> : <Moon size={20} />}
           </button>
           
-          <a href="https://github.com/Colerith/electric-wave" target="_blank" rel="noopener noreferrer" className="opacity-60 hover:opacity-100 transition-opacity text-zine-blue dark:text-white">
+          <a href="https://github.com/Colerith/electric-wave" target="_blank" rel="noopener noreferrer" className="opacity-60 hover:opacity-100 transition-opacity text-zine-blue dark:text-white p-1">
             <Github size={20} strokeWidth={1.5} />
           </a>
-          <div className="h-6 w-px bg-gray-200 dark:bg-gray-700"></div>
+          <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block"></div>
           {isAdmin ? (
             <div className="flex items-center gap-4">
-              <Link to="/dashboard" className="w-9 h-9 rounded-full overflow-hidden border-2 border-zine-pink"><img src={siteConfig.avatarUrl} className="w-full h-full object-cover" alt="admin" /></Link>
-              <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors"><LogOut size={18} /></button>
-              <Button onClick={onNewPost} variant="primary" icon={<Plus size={16} />} className="!py-1.5 !px-4 !text-xs !rounded-full">发布</Button>
+              <Link to="/dashboard" className="w-9 h-9 rounded-full overflow-hidden border-2 border-zine-pink hidden sm:block"><img src={siteConfig.avatarUrl} className="w-full h-full object-cover" alt="admin" /></Link>
+              <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors p-1"><LogOut size={18} /></button>
+              <Button onClick={onNewPost} variant="primary" icon={<Plus size={16} />} className="!py-1.5 !px-4 !text-xs !rounded-full hidden sm:flex">发布</Button>
+              <button onClick={onNewPost} className="sm:hidden text-zine-blue dark:text-white p-1"><PlusCircle size={24}/></button>
             </div>
           ) : (
-            <button onClick={onLoginClick} className="text-xs font-bold text-gray-400 hover:text-zine-blue dark:hover:text-white flex items-center gap-2"><LogIn size={14} /> 登录</button>
+            <button onClick={onLoginClick} className="text-xs font-bold text-gray-400 hover:text-zine-blue dark:hover:text-white flex items-center gap-2 px-2 py-1"><LogIn size={14} /> <span className="hidden sm:inline">登录</span></button>
           )}
         </div>
       </div>
