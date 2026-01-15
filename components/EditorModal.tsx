@@ -18,6 +18,27 @@ interface EditorModalProps {
   onSave: (post: Post) => void;
 }
 
+// Helper to preserve multiple blank lines while respecting code blocks
+const preprocessContent = (content: string) => {
+  if (!content) return '';
+  // Split by code blocks to avoid modifying content inside them
+  const parts = content.split(/(```[\s\S]*?```)/g);
+  return parts.map(part => {
+    // If it starts with ``` it's a code block, return as is
+    if (part.startsWith('```')) return part;
+    
+    // Otherwise replace sequences of 3+ newlines with empty paragraphs
+    return part.replace(/\n{3,}/g, (match) => {
+      const count = match.length;
+      // n newlines = n-1 blank lines desired? 
+      // A\n\nB = 1 blank line gap (standard).
+      // A\n\n\nB = 2 blank line gaps.
+      // We insert &nbsp; paragraphs for the extras.
+      return '\n\n' + Array(count - 2).fill('&nbsp;\n\n').join('');
+    });
+  }).join('');
+};
+
 export const EditorModal: React.FC<EditorModalProps> = ({
   isOpen,
   mode,
@@ -244,7 +265,7 @@ export const EditorModal: React.FC<EditorModalProps> = ({
                         />
                     ) : (
                         <div className="w-full h-full p-6 overflow-y-auto prose prose-blue dark:prose-invert max-w-none">
-                             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{formData.content || ''}</ReactMarkdown>
+                             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{preprocessContent(formData.content || '')}</ReactMarkdown>
                         </div>
                     )}
                 </div>

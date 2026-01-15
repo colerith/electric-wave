@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity, FileCode } from 'lucide-react';
+import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity, FileCode, ListMusic } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -43,6 +43,23 @@ function loadState<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
+
+// Helper to preserve multiple blank lines while respecting code blocks
+const preprocessContent = (content: string) => {
+  if (!content) return '';
+  // Split by code blocks to avoid modifying content inside them
+  const parts = content.split(/(```[\s\S]*?```)/g);
+  return parts.map(part => {
+    // If it starts with ``` it's a code block, return as is
+    if (part.startsWith('```')) return part;
+    
+    // Otherwise replace sequences of 3+ newlines with empty paragraphs
+    return part.replace(/\n{3,}/g, (match) => {
+      const count = match.length;
+      return '\n\n' + Array(count - 2).fill('&nbsp;\n\n').join('');
+    });
+  }).join('');
+};
 
 // --- Shared Components ---
 
@@ -640,49 +657,11 @@ const slugify = (text: string) => {
   return text.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-').replace(/(^-|-$)+/g, '');
 };
 
-const TableOfContents: React.FC<{ content: string }> = ({ content }) => {
-  const headings = content.match(/^(#{1,3})\s+(.*)$/gm);
-  if (!headings || headings.length === 0) return null;
-
-  const handleScroll = (id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      // Offset for sticky header
-      const y = element.getBoundingClientRect().top + window.scrollY - 100;
-      window.scrollTo({ top: y, behavior: 'smooth' });
-    }
-  };
-
-  return (
-    <div className="hidden lg:block w-64 shrink-0">
-      <div className="sticky top-32">
-        <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4 text-sm uppercase tracking-widest">目录</h4>
-        <ul className="space-y-3 relative border-l border-gray-200 dark:border-gray-700 ml-1">
-          {headings.map((heading, index) => {
-            const level = heading.match(/^#+/)?.[0].length || 1;
-            const text = heading.replace(/^#+\s+/, '');
-            const id = slugify(text) + '-' + index;
-            return (
-              <li key={index} style={{ paddingLeft: `${(level) * 12}px` }} className="relative group">
-                <button 
-                  onClick={() => handleScroll(id)}
-                  className="block text-left text-sm text-gray-500 dark:text-gray-400 hover:text-zine-pink dark:hover:text-zine-pink transition-colors font-serif leading-tight"
-                >
-                    {text}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </div>
-  );
-};
-
 const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) => void }> = ({ posts, isAdmin, onEdit }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const post = posts.find(p => String(p.id) === String(id));
+  const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
   
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
   
@@ -717,13 +696,13 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
   };
 
   // Re-write TOC to match the ID strategy above (pure text slug)
-  const SimpleTableOfContents: React.FC<{ content: string }> = ({ content }) => {
+  const SimpleTableOfContents: React.FC<{ content: string, onItemClick?: () => void }> = ({ content, onItemClick }) => {
      // Updated regex to catch up to h4
      const headings = content.match(/^(#{1,4})\s+(.*)$/gm);
      if (!headings || headings.length === 0) return null;
      
      return (
-        <div className="hidden lg:block w-64 shrink-0">
+        <div className="w-full lg:w-64 shrink-0">
           <div className="sticky top-32">
             <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4 text-sm uppercase tracking-widest">目录</h4>
             <ul className="space-y-2 relative border-l-2 border-gray-100 dark:border-gray-800 ml-1 py-2">
@@ -742,7 +721,11 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
                   <li key={index} className="relative group transition-all" style={{ paddingLeft }}>
                     <button onClick={() => {
                         const el = document.getElementById(id);
-                        if(el) { const y = el.getBoundingClientRect().top + window.scrollY - 100; window.scrollTo({top:y, behavior:'smooth'}); }
+                        if(el) { 
+                          const y = el.getBoundingClientRect().top + window.scrollY - 100; 
+                          window.scrollTo({top:y, behavior:'smooth'});
+                          if (onItemClick) onItemClick();
+                        }
                     }} className={`block text-left ${fontSize} ${color} hover:text-zine-pink dark:hover:text-zine-pink transition-colors font-serif leading-tight py-1 border-l-2 border-transparent hover:border-zine-pink -ml-[2px] pl-3`}>
                         {text}
                     </button>
@@ -806,10 +789,41 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
             <div className="lg:col-span-3 hidden lg:block"><SimpleTableOfContents content={post.content} /></div>
             <div className="lg:col-span-8 lg:col-start-4">
                  <div className="prose prose-lg prose-zinc dark:prose-invert max-w-none font-sans font-medium leading-loose">
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>{post.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>{preprocessContent(post.content)}</ReactMarkdown>
                  </div>
             </div>
         </div>
+
+        {/* Mobile TOC Trigger Button */}
+        <button 
+           onClick={() => setIsMobileTocOpen(true)}
+           className="lg:hidden fixed bottom-24 right-10 z-30 p-3 bg-white dark:bg-slate-700 text-zine-blue dark:text-white border border-gray-200 dark:border-gray-600 shadow-soft rounded-full transition-all duration-300 hover:scale-110 active:scale-95"
+           title="目录"
+        >
+           <ListMusic size={20} strokeWidth={1} />
+        </button>
+
+        {/* Mobile TOC Sidebar Drawer */}
+        {isMobileTocOpen && (
+           <>
+             {/* Backdrop */}
+             <div className="fixed inset-0 bg-black/40 z-[60] backdrop-blur-sm lg:hidden animate-in fade-in duration-300" onClick={() => setIsMobileTocOpen(false)} />
+             
+             {/* Drawer */}
+             <div className="fixed top-0 right-0 bottom-0 w-3/4 max-w-sm bg-white dark:bg-slate-900 z-[70] shadow-2xl p-6 lg:hidden animate-in slide-in-from-right duration-300 overflow-y-auto border-l border-gray-100 dark:border-gray-800">
+                <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100 dark:border-gray-700">
+                   <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 flex items-center gap-2">
+                      <ListMusic size={18} className="text-zine-pink"/>
+                      文章目录
+                   </h4>
+                   <button onClick={() => setIsMobileTocOpen(false)} className="p-2 text-gray-400 hover:text-red-500 transition-colors bg-gray-50 dark:bg-slate-800 rounded-full">
+                      <X size={20} />
+                   </button>
+                </div>
+                <SimpleTableOfContents content={post.content} onItemClick={() => setIsMobileTocOpen(false)} />
+             </div>
+           </>
+        )}
     </article>
   );
 };
@@ -940,7 +954,18 @@ export const App: React.FC = () => {
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => loadState(KEYS.CONFIG, DEFAULT_SITE_CONFIG));
   
   const [isAdmin, setIsAdmin] = useState(() => loadState(KEYS.ADMIN, false));
-  const [isDark, setIsDark] = useState(() => loadState(KEYS.THEME, false));
+  
+  // Custom theme initialization to support timed fallback without locking preference
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem(KEYS.THEME);
+    if (saved !== null) {
+      try { return JSON.parse(saved); } catch (e) { return false; }
+    }
+    // Default: Time based (18:00 - 06:00)
+    const hour = new Date().getHours();
+    return hour >= 18 || hour < 6;
+  });
+  
   const [searchQuery, setSearchQuery] = useState('');
   
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -953,7 +978,29 @@ export const App: React.FC = () => {
   useEffect(() => localStorage.setItem(KEYS.LINKS, JSON.stringify(links)), [links]);
   useEffect(() => localStorage.setItem(KEYS.CONFIG, JSON.stringify(siteConfig)), [siteConfig]);
   useEffect(() => localStorage.setItem(KEYS.ADMIN, JSON.stringify(isAdmin)), [isAdmin]);
-  useEffect(() => localStorage.setItem(KEYS.THEME, JSON.stringify(isDark)), [isDark]);
+  
+  // Theme Toggle Handler
+  const toggleTheme = () => {
+    const newMode = !isDark;
+    setIsDark(newMode);
+    localStorage.setItem(KEYS.THEME, JSON.stringify(newMode));
+  };
+
+  // Timed Check Effect (18:00 - 06:00)
+  // Only runs if user hasn't manually set a preference
+  useEffect(() => {
+    const checkTime = () => {
+      if (localStorage.getItem(KEYS.THEME) !== null) return;
+      
+      const hour = new Date().getHours();
+      const shouldBeDark = hour >= 18 || hour < 6;
+      setIsDark(prev => prev !== shouldBeDark ? shouldBeDark : prev);
+    };
+
+    // Check every minute
+    const interval = setInterval(checkTime, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (isDark) document.documentElement.classList.add('dark');
@@ -1017,7 +1064,7 @@ export const App: React.FC = () => {
              <Header 
                 isAdmin={isAdmin} 
                 isDark={isDark} 
-                toggleTheme={() => setIsDark(!isDark)} 
+                toggleTheme={toggleTheme} 
                 onLoginClick={() => setIsLoginOpen(true)}
                 onLogout={() => setIsAdmin(false)}
                 onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })}
@@ -1030,7 +1077,7 @@ export const App: React.FC = () => {
                 <Route path="/" element={
                     <HomeWithNavigation 
                         posts={filteredPosts} 
-                        categories={categories}
+                        categories={categories} 
                         searchQuery={searchQuery}
                         setSearchQuery={setSearchQuery}
                         isAdmin={isAdmin}
