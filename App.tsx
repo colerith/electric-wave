@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity, FileCode, ListMusic } from 'lucide-react';
+import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity, FileCode, ListMusic, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -22,7 +22,28 @@ const KEYS = {
   LINKS: 'ew_links',
   CONFIG: 'ew_site_config',
   ADMIN: 'ew_admin_logged_in',
-  THEME: 'ew_theme_mode'
+  THEME: 'ew_theme_mode',
+  GITHUB_CONFIG: 'ew_github_config'
+};
+
+interface GitHubConfig {
+  username: string;
+  repo: string;
+  branch: string;
+  filePath: string;
+  token: string;
+  autoSync: boolean;
+  syncInterval: number; // minutes
+}
+
+const DEFAULT_GITHUB_CONFIG: GitHubConfig = {
+  username: '',
+  repo: '',
+  branch: 'main',
+  filePath: 'src/types.ts',
+  token: '',
+  autoSync: false,
+  syncInterval: 30
 };
 
 async function digestMessage(message: string) {
@@ -43,6 +64,66 @@ function loadState<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
+
+// Generate the content string for types.ts
+const generateTypesFileContent = (
+    posts: Post[], 
+    categories: string[], 
+    announcements: Announcement[], 
+    links: FriendlyLink[], 
+    siteConfig: SiteConfig
+) => {
+    return `
+export interface Post {
+  id: string;
+  title: string;
+  excerpt: string;
+  content: string; // Now supports Markdown
+  tags: string[];
+  coverImage: string;
+  createdAt: number;
+  author: string;
+  category: string; // Dynamic category
+  isPinned?: boolean;
+}
+
+export interface FriendlyLink {
+  id: string;
+  title: string;
+  url: string;
+}
+
+export interface Announcement {
+    id: string;
+    content: string;
+    isActive: boolean;
+}
+
+export interface SiteConfig {
+    siteName: string;
+    avatarUrl: string;
+    startDate: string; // Format: YYYY-MM-DD
+}
+
+export type ViewMode = 'gallery' | 'list';
+
+export interface EditorState {
+  isOpen: boolean;
+  mode: 'create' | 'edit';
+  currentPost: Post | null;
+}
+
+export const DEFAULT_CATEGORIES = ${JSON.stringify(categories, null, 2)};
+
+export const DEFAULT_SITE_CONFIG: SiteConfig = ${JSON.stringify(siteConfig, null, 2)};
+
+export const INITIAL_POSTS: Post[] = ${JSON.stringify(posts, null, 2)};
+
+export const INITIAL_LINKS: FriendlyLink[] = ${JSON.stringify(links, null, 2)};
+
+export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announcements, null, 2)};
+`;
+};
 
 // Helper to preserve multiple blank lines while respecting code blocks
 const preprocessContent = (content: string) => {
@@ -408,60 +489,30 @@ const Dashboard: React.FC<{
     const [newCategory, setNewCategory] = useState('');
     const [newLink, setNewLink] = useState({ title: '', url: '' });
     const [newAnnouncement, setNewAnnouncement] = useState('');
+    
+    // GitHub Sync State
+    const [ghConfig, setGhConfig] = useState<GitHubConfig>(() => loadState(KEYS.GITHUB_CONFIG, DEFAULT_GITHUB_CONFIG));
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncStatus, setSyncStatus] = useState<{success: boolean, message: string, time: string} | null>(null);
+
+    // Save GitHub config whenever it changes
+    useEffect(() => {
+        localStorage.setItem(KEYS.GITHUB_CONFIG, JSON.stringify(ghConfig));
+    }, [ghConfig]);
+
+    // Auto-sync logic
+    useEffect(() => {
+        if (!ghConfig.autoSync || ghConfig.syncInterval <= 0 || !ghConfig.token || !ghConfig.username || !ghConfig.repo) return;
+
+        const intervalId = setInterval(() => {
+            handleGitHubSync(true);
+        }, ghConfig.syncInterval * 60 * 1000);
+
+        return () => clearInterval(intervalId);
+    }, [ghConfig, posts, categories, announcements, links, siteConfig]);
 
     const handleExportTs = () => {
-        // Construct the full content of types.ts
-        const typesFileContent = `
-export interface Post {
-  id: string;
-  title: string;
-  excerpt: string;
-  content: string; // Now supports Markdown
-  tags: string[];
-  coverImage: string;
-  createdAt: number;
-  author: string;
-  category: string; // Dynamic category
-  isPinned?: boolean;
-}
-
-export interface FriendlyLink {
-  id: string;
-  title: string;
-  url: string;
-}
-
-export interface Announcement {
-    id: string;
-    content: string;
-    isActive: boolean;
-}
-
-export interface SiteConfig {
-    siteName: string;
-    avatarUrl: string;
-    startDate: string; // Format: YYYY-MM-DD
-}
-
-export type ViewMode = 'gallery' | 'list';
-
-export interface EditorState {
-  isOpen: boolean;
-  mode: 'create' | 'edit';
-  currentPost: Post | null;
-}
-
-export const DEFAULT_CATEGORIES = ${JSON.stringify(categories, null, 2)};
-
-export const DEFAULT_SITE_CONFIG: SiteConfig = ${JSON.stringify(siteConfig, null, 2)};
-
-export const INITIAL_POSTS: Post[] = ${JSON.stringify(posts, null, 2)};
-
-export const INITIAL_LINKS: FriendlyLink[] = ${JSON.stringify(links, null, 2)};
-
-export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announcements, null, 2)};
-`;
-
+        const typesFileContent = generateTypesFileContent(posts, categories, announcements, links, siteConfig);
         const blob = new Blob([typesFileContent], { type: 'text/typescript' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -471,6 +522,66 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announceme
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    };
+
+    const handleGitHubSync = async (isAuto = false) => {
+        if (!ghConfig.username || !ghConfig.repo || !ghConfig.token) {
+            setSyncStatus({ success: false, message: '请完善 GitHub 配置', time: new Date().toLocaleTimeString() });
+            return;
+        }
+
+        setIsSyncing(true);
+        try {
+            const content = generateTypesFileContent(posts, categories, announcements, links, siteConfig);
+            const apiUrl = `https://api.github.com/repos/${ghConfig.username}/${ghConfig.repo}/contents/${ghConfig.filePath}`;
+            
+            // 1. Get current file SHA (if exists)
+            const getRes = await fetch(`${apiUrl}?ref=${ghConfig.branch}`, {
+                headers: { 
+                    'Authorization': `token ${ghConfig.token}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            });
+
+            let sha = '';
+            if (getRes.ok) {
+                const data = await getRes.json();
+                sha = data.sha;
+            } else if (getRes.status !== 404) {
+                 throw new Error(`Failed to fetch file: ${getRes.statusText}`);
+            }
+
+            // 2. PUT Update
+            // Fix UTF-8 encoding for Base64
+            const base64Content = btoa(unescape(encodeURIComponent(content)));
+            
+            const putRes = await fetch(apiUrl, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${ghConfig.token}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: isAuto ? `Auto-sync: Update data` : `Manual sync: Update data via Dashboard`,
+                    content: base64Content,
+                    branch: ghConfig.branch,
+                    sha: sha || undefined
+                })
+            });
+
+            if (!putRes.ok) {
+                const errData = await putRes.json();
+                throw new Error(errData.message || 'Update failed');
+            }
+
+            setSyncStatus({ success: true, message: 'GitHub 同步成功', time: new Date().toLocaleTimeString() });
+        } catch (error: any) {
+            setSyncStatus({ success: false, message: `同步失败: ${error.message}`, time: new Date().toLocaleTimeString() });
+            if (!isAuto) alert(`GitHub Sync Failed: ${error.message}`);
+        } finally {
+            setIsSyncing(false);
+        }
     };
 
     // Helpers for sorting
@@ -485,29 +596,32 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announceme
     };
 
     return (
-        <div className="max-w-7xl mx-auto px-6 py-12">
-            <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 shadow-soft p-8 min-h-[600px] flex flex-col md:flex-row gap-8 transition-colors">
-                <div className="w-full md:w-64 md:border-r border-gray-100 dark:border-gray-700 md:pr-6 space-y-2 shrink-0">
-                    <h2 className="text-xl font-serif font-bold text-zine-blue dark:text-white mb-6">控制台</h2>
-                    <button onClick={() => setActiveTab('posts')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'posts' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>文章管理</button>
-                    <button onClick={() => setActiveTab('announcements')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'announcements' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>公告管理</button>
-                    <button onClick={() => setActiveTab('categories')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'categories' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>分区设置</button>
-                    <button onClick={() => setActiveTab('links')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'links' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>友链设置</button>
-                    <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'settings' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}>全局设置</button>
+        // Expanded Dashboard Container
+        <div className="w-[98%] max-w-[1920px] mx-auto px-4 md:px-8 py-8 h-[calc(100vh-80px)] md:h-[calc(100vh-100px)] animate-in fade-in duration-300">
+            <div className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 shadow-soft p-6 md:p-8 h-full flex flex-col md:flex-row gap-8 transition-colors rounded-xl overflow-hidden">
+                <div className="w-full md:w-64 md:border-r border-gray-100 dark:border-gray-700 md:pr-6 space-y-2 shrink-0 flex flex-row md:flex-col overflow-x-auto md:overflow-visible pb-2 md:pb-0 gap-2 md:gap-0">
+                    <h2 className="text-xl font-serif font-bold text-zine-blue dark:text-white mb-6 hidden md:block">控制台</h2>
+                    <button onClick={() => setActiveTab('posts')} className={`whitespace-nowrap w-auto md:w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'posts' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}><LayoutDashboard className="inline mr-2 w-4 h-4"/>文章</button>
+                    <button onClick={() => setActiveTab('announcements')} className={`whitespace-nowrap w-auto md:w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'announcements' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}><Megaphone className="inline mr-2 w-4 h-4"/>公告</button>
+                    <button onClick={() => setActiveTab('categories')} className={`whitespace-nowrap w-auto md:w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'categories' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}><List className="inline mr-2 w-4 h-4"/>分区</button>
+                    <button onClick={() => setActiveTab('links')} className={`whitespace-nowrap w-auto md:w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'links' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}><LinkIcon className="inline mr-2 w-4 h-4"/>友链</button>
+                    <button onClick={() => setActiveTab('settings')} className={`whitespace-nowrap w-auto md:w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'settings' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}><Settings className="inline mr-2 w-4 h-4"/>设置</button>
                 </div>
-                <div className="flex-1 overflow-x-auto">
+                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                     {/* Posts Management */}
                     {activeTab === 'posts' && (
-                        <table className="w-full text-left border-collapse min-w-[500px]">
-                            <thead className="text-xs uppercase text-gray-400 border-b border-gray-100 dark:border-gray-700"><tr><th className="py-4">标题</th><th className="py-4">日期</th><th className="py-4 text-right">操作</th></tr></thead>
+                        <div className="min-w-[600px]">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="text-xs uppercase text-gray-400 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-slate-800 z-10"><tr><th className="py-4">标题</th><th className="py-4">分类</th><th className="py-4">日期</th><th className="py-4 text-right">操作</th></tr></thead>
                             <tbody>
                                 {posts.map(post => (
                                     <tr key={post.id} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-                                        <td className="py-4 font-serif font-bold text-zine-blue dark:text-gray-200 flex items-center gap-2">
-                                            {post.isPinned && <Pin size={12} className="text-zine-pink" fill="currentColor"/>}
+                                        <td className="py-4 font-serif font-bold text-zine-blue dark:text-gray-200 flex items-center gap-2 max-w-md truncate">
+                                            {post.isPinned && <Pin size={12} className="text-zine-pink shrink-0" fill="currentColor"/>}
                                             {post.title}
                                         </td>
-                                        <td className="py-4 text-xs text-gray-400">{new Date(post.createdAt).toLocaleDateString()}</td>
+                                        <td className="py-4 text-xs text-gray-500"><span className="bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded">{post.category}</span></td>
+                                        <td className="py-4 text-xs text-gray-400 font-mono">{new Date(post.createdAt).toLocaleDateString()}</td>
                                         <td className="py-4 text-right">
                                             <div className="flex justify-end gap-3">
                                               <button onClick={() => onEditPost(post)} className="text-gray-400 hover:text-zine-blue dark:hover:text-white"><Edit3 size={16}/></button>
@@ -518,11 +632,12 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announceme
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     )}
 
                     {/* Announcements Management */}
                     {activeTab === 'announcements' && (
-                        <div className="space-y-6">
+                        <div className="space-y-6 max-w-4xl">
                             <div className="flex flex-col gap-2">
                                 {/* Use Textarea for Newlines */}
                                 <textarea value={newAnnouncement} onChange={e => setNewAnnouncement(e.target.value)} placeholder="发布新公告 (支持换行)..." className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 bg-transparent dark:text-white rounded-lg outline-none focus:border-zine-blue text-sm min-h-[100px]" />
@@ -552,7 +667,7 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announceme
 
                     {/* Categories Management */}
                     {activeTab === 'categories' && (
-                         <div className="space-y-6">
+                         <div className="space-y-6 max-w-4xl">
                             <div className="flex gap-2">
                                 <input value={newCategory} onChange={e => setNewCategory(e.target.value)} placeholder="新分区名称..." className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 bg-transparent dark:text-white rounded-lg outline-none focus:border-zine-blue text-sm" />
                                 <Button onClick={() => { if(newCategory && !categories.includes(newCategory)) { onUpdateCategories([...categories, newCategory]); setNewCategory(''); } }} className="!py-2">添加</Button>
@@ -574,7 +689,7 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announceme
 
                     {/* Links Management */}
                     {activeTab === 'links' && (
-                         <div className="space-y-6">
+                         <div className="space-y-6 max-w-4xl">
                             <div className="flex gap-2 flex-col sm:flex-row">
                                 <input value={newLink.title} onChange={e => setNewLink({...newLink, title: e.target.value})} placeholder="网站名称" className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 bg-transparent dark:text-white rounded-lg outline-none focus:border-zine-blue text-sm" />
                                 <input value={newLink.url} onChange={e => setNewLink({...newLink, url: e.target.value})} placeholder="URL (https://...)" className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 bg-transparent dark:text-white rounded-lg outline-none focus:border-zine-blue text-sm" />
@@ -600,27 +715,26 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announceme
 
                     {/* Global Settings */}
                     {activeTab === 'settings' && (
-                        <div className="space-y-6 max-w-2xl animate-in fade-in duration-300">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 animate-in fade-in duration-300">
+                            {/* Basic Info */}
                             <div className="bg-gray-50 dark:bg-slate-700/30 p-8 rounded-xl border border-gray-100 dark:border-gray-700 space-y-8">
+                                <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white border-b border-gray-200 dark:border-gray-600 pb-2">基础信息</h3>
                                 <div>
                                     <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-2 uppercase tracking-wider">站点名称</label>
                                     <input 
                                         value={siteConfig.siteName} 
                                         onChange={e => onUpdateSiteConfig({...siteConfig, siteName: e.target.value})} 
                                         className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-base font-serif text-zine-blue dark:text-white shadow-sm" 
-                                        placeholder="输入站点名称..."
                                     />
-                                    <p className="mt-2 text-xs text-gray-400">显示在标题栏和页脚的品牌名称。</p>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-2 uppercase tracking-wider">头像链接 (URL)</label>
+                                    <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-2 uppercase tracking-wider">头像链接</label>
                                     <div className="flex gap-4">
                                         <img src={siteConfig.avatarUrl} alt="Preview" className="w-12 h-12 rounded-full border border-gray-200 object-cover" />
                                         <input 
                                             value={siteConfig.avatarUrl} 
                                             onChange={e => onUpdateSiteConfig({...siteConfig, avatarUrl: e.target.value})} 
                                             className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 dark:text-gray-300 shadow-sm" 
-                                            placeholder="https://..."
                                         />
                                     </div>
                                 </div>
@@ -632,17 +746,105 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announceme
                                         onChange={e => onUpdateSiteConfig({...siteConfig, startDate: e.target.value})} 
                                         className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 dark:text-gray-300 shadow-sm" 
                                     />
-                                    <p className="mt-2 text-xs text-gray-400">用于计算页脚显示的“运行天数”。</p>
                                 </div>
-                                <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-                                    <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-4 uppercase tracking-wider">数据维护</label>
-                                    <Button onClick={handleExportTs} icon={<FileCode size={16} />} variant="secondary" className="w-full">
-                                        导出 types.ts (用于覆盖更新)
+                            </div>
+
+                            {/* GitHub Sync */}
+                            <div className="bg-gray-50 dark:bg-slate-700/30 p-8 rounded-xl border border-gray-100 dark:border-gray-700 space-y-8">
+                                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-600 pb-2">
+                                     <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white flex items-center gap-2">
+                                         <Github size={18}/> GitHub 数据同步
+                                     </h3>
+                                     {syncStatus && (
+                                         <span className={`text-xs flex items-center gap-1 ${syncStatus.success ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                                             {syncStatus.success ? <CheckCircle2 size={12}/> : <AlertCircle size={12}/>} 
+                                             {syncStatus.time}
+                                         </span>
+                                     )}
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">用户名 (Owner)</label>
+                                        <input 
+                                            value={ghConfig.username}
+                                            onChange={e => setGhConfig({...ghConfig, username: e.target.value})}
+                                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white"
+                                            placeholder="e.g. Colerith"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">仓库名 (Repo)</label>
+                                        <input 
+                                            value={ghConfig.repo}
+                                            onChange={e => setGhConfig({...ghConfig, repo: e.target.value})}
+                                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white"
+                                            placeholder="e.g. electric-wave"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 mb-1">Personal Access Token (PAT)</label>
+                                    <input 
+                                        type="password"
+                                        value={ghConfig.token}
+                                        onChange={e => setGhConfig({...ghConfig, token: e.target.value})}
+                                        className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
+                                        placeholder="github_pat_..."
+                                    />
+                                    <p className="mt-1 text-[10px] text-gray-400">Token 需要 Repo 读写权限。仅保存在本地浏览器中。</p>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                     <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">分支 (Branch)</label>
+                                        <input 
+                                            value={ghConfig.branch}
+                                            onChange={e => setGhConfig({...ghConfig, branch: e.target.value})}
+                                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">文件路径</label>
+                                        <input 
+                                            value={ghConfig.filePath}
+                                            onChange={e => setGhConfig({...ghConfig, filePath: e.target.value})}
+                                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg flex items-center justify-between">
+                                     <div className="flex items-center gap-2">
+                                         <Clock size={16} className="text-zine-blue dark:text-blue-300"/>
+                                         <label className="text-sm font-bold text-zine-blue dark:text-blue-300">定时自动同步</label>
+                                     </div>
+                                     <div className="flex items-center gap-2">
+                                         <input 
+                                             type="number" 
+                                             min="5" 
+                                             value={ghConfig.syncInterval} 
+                                             onChange={e => setGhConfig({...ghConfig, syncInterval: parseInt(e.target.value) || 30})}
+                                             className="w-16 px-2 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded text-center text-sm dark:text-white"
+                                         />
+                                         <span className="text-xs text-gray-500">分钟</span>
+                                         <button 
+                                            onClick={() => setGhConfig({...ghConfig, autoSync: !ghConfig.autoSync})}
+                                            className={`w-10 h-6 rounded-full relative transition-colors ${ghConfig.autoSync ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                                         >
+                                             <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${ghConfig.autoSync ? 'translate-x-4' : ''}`}></span>
+                                         </button>
+                                     </div>
+                                </div>
+
+                                <div className="flex gap-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                    <Button onClick={() => handleGitHubSync(false)} disabled={isSyncing} className="flex-1" icon={isSyncing ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>}>
+                                        {isSyncing ? '同步中...' : '立即同步到 GitHub'}
                                     </Button>
-                                    <p className="mt-3 text-xs text-gray-400 leading-relaxed">
-                                        点击上方按钮下载 `types.ts` 文件。将该文件直接覆盖到你 GitHub 仓库中的 `types.ts` 即可完成数据更新。
-                                        (无需再手动复制 JSON 内容)
-                                    </p>
+                                    <Button onClick={handleExportTs} variant="secondary" className="px-4" title="手动下载备份">
+                                        <Download size={18}/>
+                                    </Button>
                                 </div>
                             </div>
                         </div>
