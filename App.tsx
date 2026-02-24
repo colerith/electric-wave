@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { HashRouter, Routes, Route, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity, FileCode, ListMusic, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, ChevronDown, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity, FileCode, ListMusic, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -460,6 +460,59 @@ const VersionConflictModal: React.FC<{
             </Button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const FilterDropdown: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  className?: string;
+}> = ({ value, onChange, options, className = '' }) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const current = options.find(o => o.value === value)?.label ?? options[0]?.label ?? '';
+
+  return (
+    <div ref={wrapRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className="min-w-[180px] px-4 py-2 rounded-full text-sm text-left bg-white/90 dark:bg-slate-800/90 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 shadow-sm hover:border-zine-blue/40 dark:hover:border-zine-pink/50 transition-all duration-300 flex items-center justify-between"
+      >
+        <span className="truncate">{current}</span>
+        <ChevronDown size={16} className={`ml-3 shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      <div
+        className={`absolute left-0 mt-2 w-full z-40 origin-top rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md shadow-2xl transition-all duration-300 ${open ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-y-95 -translate-y-1 pointer-events-none'}`}
+      >
+        {options.map(option => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => {
+              onChange(option.value);
+              setOpen(false);
+            }}
+            className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value === option.value ? 'bg-zine-blue/10 dark:bg-blue-900/30 text-zine-blue dark:text-blue-200 font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700/60'}`}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -1313,19 +1366,29 @@ const HomeWithNavigation: React.FC<{
 
                  <div className="w-full h-px bg-gray-100 dark:bg-slate-800 my-2"></div>
 
-                 <select value={initialFilter} onChange={(e) => setInitialFilter(e.target.value)} className="px-3 py-2 text-sm rounded-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">
-                    {initialOptions.map(i => <option key={i} value={i}>首字母：{i}</option>)}
-                 </select>
+                 <FilterDropdown
+                    value={initialFilter}
+                    onChange={setInitialFilter}
+                    options={initialOptions.map(i => ({ value: i, label: `首字母：${i}` }))}
+                 />
 
-                 <select value={sortMode} onChange={(e) => setSortMode(e.target.value as 'latest' | 'edited')} className="px-3 py-2 text-sm rounded-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">
-                    <option value="latest">排序：最新发布</option>
-                    <option value="edited">排序：最近编辑</option>
-                 </select>
+                 <FilterDropdown
+                    value={sortMode}
+                    onChange={(v) => setSortMode(v as 'latest' | 'edited')}
+                    options={[
+                      { value: 'latest', label: '排序：最新发布' },
+                      { value: 'edited', label: '排序：最近编辑' }
+                    ]}
+                 />
 
-                 <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="px-3 py-2 text-sm rounded-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">
-                    <option value="全部">标签：全部</option>
-                    {allTagOptions.map(tag => <option key={tag} value={tag}>{tag}</option>)}
-                 </select>
+                 <FilterDropdown
+                    value={tagFilter}
+                    onChange={setTagFilter}
+                    options={[
+                      { value: '全部', label: '标签：全部' },
+                      ...allTagOptions.map(tag => ({ value: tag, label: `标签：${tag}` }))
+                    ]}
+                 />
             </div>
 
             {/* Pinned Posts Section */}
