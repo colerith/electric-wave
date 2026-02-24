@@ -25,7 +25,8 @@ const KEYS = {
   THEME: 'ew_theme_mode',
   GITHUB_CONFIG: 'ew_github_config',
   DATA_HISTORY: 'ew_data_history',
-  LAST_SEEN_PUBLISHED_HASH: 'ew_last_seen_published_hash'
+  LAST_SEEN_PUBLISHED_HASH: 'ew_last_seen_published_hash',
+  EDITED_TIME_MAP: 'ew_post_edited_time_map'
 };
 
 interface DataBundle {
@@ -1203,18 +1204,65 @@ const HomeWithNavigation: React.FC<{
   categories: string[];
   searchQuery: string;
   setSearchQuery: (q: string) => void;
+  editedTimeMap: Record<string, number>;
   isAdmin: boolean;
   handleEditPost: (p: Post) => void;
   handleDeletePost: (id: string) => void;
   siteConfig: SiteConfig;
   announcements: Announcement[];
   hitokoto: { text: string; from: string } | null;
-}> = ({ posts, categories, searchQuery, setSearchQuery, isAdmin, handleEditPost, handleDeletePost, siteConfig, announcements, hitokoto }) => {
+}> = ({ posts, categories, searchQuery, setSearchQuery, editedTimeMap, isAdmin, handleEditPost, handleDeletePost, siteConfig, announcements, hitokoto }) => {
     const navigate = useNavigate();
+    const [sortMode, setSortMode] = useState<'latest' | 'edited'>('latest');
+    const [initialFilter, setInitialFilter] = useState('全部');
+    const [tagFilter, setTagFilter] = useState('全部');
+    const [currentPage, setCurrentPage] = useState(1);
+    const POSTS_PER_PAGE = 20;
 
-    // Separate pinned and regular from the passed 'posts' (which are already filtered by search/category in App component)
-    const pinnedPosts = posts.filter(p => p.isPinned);
-    const regularPosts = posts.filter(p => !p.isPinned);
+    const getInitial = (title: string) => {
+        const first = title.trim().charAt(0);
+        if (!first) return '#';
+        const upper = first.toUpperCase();
+        return /[A-Z]/.test(upper) ? upper : '#';
+    };
+
+    const allTagOptions = useMemo(() => Array.from(new Set(posts.flatMap(p => p.tags))).filter(Boolean), [posts]);
+    const initialOptions = useMemo(() => {
+        const initials = Array.from(new Set(posts.map(p => getInitial(p.title))));
+        return ['全部', ...initials.sort()];
+    }, [posts]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, sortMode, initialFilter, tagFilter]);
+
+    const filteredAndSortedPosts = useMemo(() => {
+        let result = [...posts];
+
+        if (initialFilter !== '全部') {
+            result = result.filter(p => getInitial(p.title) === initialFilter);
+        }
+
+        if (tagFilter !== '全部') {
+            result = result.filter(p => p.tags.includes(tagFilter));
+        }
+
+        result.sort((a, b) => {
+            if (sortMode === 'edited') {
+                const aEdited = editedTimeMap[a.id] || a.createdAt;
+                const bEdited = editedTimeMap[b.id] || b.createdAt;
+                return bEdited - aEdited;
+            }
+            return b.createdAt - a.createdAt;
+        });
+
+        return result;
+    }, [posts, sortMode, initialFilter, tagFilter, editedTimeMap]);
+
+    const pinnedPosts = filteredAndSortedPosts.filter(p => p.isPinned);
+    const regularPosts = filteredAndSortedPosts.filter(p => !p.isPinned);
+    const totalPages = Math.max(1, Math.ceil(regularPosts.length / POSTS_PER_PAGE));
+    const pagedRegularPosts = regularPosts.slice((currentPage - 1) * POSTS_PER_PAGE, currentPage * POSTS_PER_PAGE);
 
     return (
         <main className="max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1 relative z-10">
@@ -1262,6 +1310,22 @@ const HomeWithNavigation: React.FC<{
                         {cat}
                      </button>
                  ))}
+
+                 <div className="w-full h-px bg-gray-100 dark:bg-slate-800 my-2"></div>
+
+                 <select value={initialFilter} onChange={(e) => setInitialFilter(e.target.value)} className="px-3 py-2 text-sm rounded-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">
+                    {initialOptions.map(i => <option key={i} value={i}>首字母：{i}</option>)}
+                 </select>
+
+                 <select value={sortMode} onChange={(e) => setSortMode(e.target.value as 'latest' | 'edited')} className="px-3 py-2 text-sm rounded-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">
+                    <option value="latest">排序：最新发布</option>
+                    <option value="edited">排序：最近编辑</option>
+                 </select>
+
+                 <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="px-3 py-2 text-sm rounded-full bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">
+                    <option value="全部">标签：全部</option>
+                    {allTagOptions.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+                 </select>
             </div>
 
             {/* Pinned Posts Section */}
@@ -1294,8 +1358,9 @@ const HomeWithNavigation: React.FC<{
                     {searchQuery ? (categories.includes(searchQuery) ? `${searchQuery} 分区` : '搜索结果') : '最新收录'}
                 </h3>
                 {regularPosts.length > 0 ? (
+                    <>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {regularPosts.map(post => (
+                        {pagedRegularPosts.map(post => (
                             <GalleryCard 
                                 key={post.id} 
                                 post={post} 
@@ -1306,6 +1371,15 @@ const HomeWithNavigation: React.FC<{
                             />
                         ))}
                     </div>
+
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 mt-10">
+                        <Button variant="secondary" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>上一页</Button>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">{currentPage} / {totalPages}</span>
+                        <Button variant="secondary" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>下一页</Button>
+                      </div>
+                    )}
+                    </>
                 ) : (
                     <div className="py-20 text-center text-gray-400 font-serif italic border border-dashed border-gray-200 dark:border-gray-700 rounded-2xl">
                         {posts.length === 0 ? "此分区暂无内容..." : "..."}
@@ -1341,6 +1415,7 @@ export const App: React.FC = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
   const [hitokoto, setHitokoto] = useState<{ text: string; from: string } | null>(null);
+  const [editedTimeMap, setEditedTimeMap] = useState<Record<string, number>>(() => loadState(KEYS.EDITED_TIME_MAP, {}));
   const [versionChoices, setVersionChoices] = useState<VersionChoice[]>([]);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const hasReconciledRef = useRef(false);
@@ -1434,6 +1509,7 @@ export const App: React.FC = () => {
   useEffect(() => localStorage.setItem(KEYS.LINKS, JSON.stringify(links)), [links]);
   useEffect(() => localStorage.setItem(KEYS.CONFIG, JSON.stringify(siteConfig)), [siteConfig]);
   useEffect(() => localStorage.setItem(KEYS.ADMIN, JSON.stringify(isAdmin)), [isAdmin]);
+  useEffect(() => localStorage.setItem(KEYS.EDITED_TIME_MAP, JSON.stringify(editedTimeMap)), [editedTimeMap]);
 
   // 保存本地版本历史，支持出现冲突时“多版本比较并选择”
   useEffect(() => {
@@ -1529,6 +1605,7 @@ export const App: React.FC = () => {
       setPosts([post, ...posts]);
     } else {
       setPosts(posts.map(p => p.id === post.id ? post : p));
+      setEditedTimeMap(prev => ({ ...prev, [post.id]: Date.now() }));
     }
     setEditor({ ...editor, isOpen: false });
   };
@@ -1581,6 +1658,7 @@ export const App: React.FC = () => {
                         categories={categories} 
                         searchQuery={searchQuery}
                         setSearchQuery={setSearchQuery}
+                        editedTimeMap={editedTimeMap}
                         isAdmin={isAdmin}
                         handleEditPost={handleEditPost}
                         handleDeletePost={handleDeletePost}
