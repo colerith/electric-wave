@@ -125,6 +125,10 @@ const generateTypesFileContent = (
     links: FriendlyLink[], 
     siteConfig: SiteConfig
 ) => {
+    const bundleForHash = { posts, categories, announcements, links, siteConfig };
+    const versionHash = hashString(JSON.stringify(bundleForHash));
+    const generatedAt = new Date().toISOString();
+
     return `
 export interface Post {
   id: string;
@@ -156,6 +160,11 @@ export interface SiteConfig {
     avatarUrl: string;
     startDate: string; // Format: YYYY-MM-DD
 }
+
+export const DATA_VERSION = {
+  hash: '${versionHash}',
+  generatedAt: '${generatedAt}'
+} as const;
 
 export type ViewMode = 'gallery' | 'list';
 
@@ -610,6 +619,13 @@ const Dashboard: React.FC<{
     const [ghConfig, setGhConfig] = useState<GitHubConfig>(() => loadState(KEYS.GITHUB_CONFIG, DEFAULT_GITHUB_CONFIG));
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncStatus, setSyncStatus] = useState<{success: boolean, message: string, time: string} | null>(null);
+    const [draggingPostId, setDraggingPostId] = useState<string | null>(null);
+
+    const orderedPosts = useMemo(() => {
+        const pinned = posts.filter(p => p.isPinned);
+        const normal = posts.filter(p => !p.isPinned);
+        return [...pinned, ...normal];
+    }, [posts]);
 
     // Save GitHub config whenever it changes
     useEffect(() => {
@@ -711,6 +727,25 @@ const Dashboard: React.FC<{
         return newArr;
     };
 
+    const movePostBefore = (arr: Post[], sourceId: string, targetId: string) => {
+        const sourceIndex = arr.findIndex(p => p.id === sourceId);
+        const targetIndex = arr.findIndex(p => p.id === targetId);
+        if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) return arr;
+
+        const sourcePost = arr[sourceIndex];
+        const targetPost = arr[targetIndex];
+        if (!!sourcePost.isPinned !== !!targetPost.isPinned) {
+            alert('置顶文章与普通文章分组显示，拖动排序仅在组内生效。');
+            return arr;
+        }
+
+        const next = [...arr];
+        const [item] = next.splice(sourceIndex, 1);
+        const nextTargetIndex = next.findIndex(p => p.id === targetId);
+        next.splice(nextTargetIndex, 0, item);
+        return next;
+    };
+
     return (
         // Expanded Dashboard Container
         <div className="w-[98%] max-w-[1920px] mx-auto px-4 md:px-8 py-8 h-[calc(100vh-80px)] md:h-[calc(100vh-100px)] animate-in fade-in duration-300">
@@ -727,12 +762,28 @@ const Dashboard: React.FC<{
                     {/* Posts Management */}
                     {activeTab === 'posts' && (
                         <div className="min-w-[600px]">
+                        <div className="mb-4 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                          <GripVertical size={14} /> 支持拖拽排序（默认置顶文章在最上方）
+                        </div>
                         <table className="w-full text-left border-collapse">
                             <thead className="text-xs uppercase text-gray-400 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-slate-800 z-10"><tr><th className="py-4">标题</th><th className="py-4">分类</th><th className="py-4">日期</th><th className="py-4 text-right">操作</th></tr></thead>
                             <tbody>
-                                {posts.map(post => (
-                                    <tr key={post.id} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                                {orderedPosts.map(post => (
+                                    <tr
+                                      key={post.id}
+                                      draggable
+                                      onDragStart={() => setDraggingPostId(post.id)}
+                                      onDragOver={(e) => e.preventDefault()}
+                                      onDrop={() => {
+                                        if (!draggingPostId || draggingPostId === post.id) return;
+                                        onUpdatePosts(movePostBefore(orderedPosts, draggingPostId, post.id));
+                                        setDraggingPostId(null);
+                                      }}
+                                      onDragEnd={() => setDraggingPostId(null)}
+                                      className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+                                    >
                                         <td className="py-4 font-serif font-bold text-zine-blue dark:text-gray-200 flex items-center gap-2 max-w-md truncate">
+                                            <GripVertical size={14} className="text-gray-300 shrink-0" />
                                             {post.isPinned && <Pin size={12} className="text-zine-pink shrink-0" fill="currentColor"/>}
                                             {post.title}
                                         </td>
@@ -955,7 +1006,7 @@ const Dashboard: React.FC<{
                                 </div>
 
                                 <div className="flex gap-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                                    <Button onClick={() => handleGitHubSync(false)} disabled={isSyncing} className="flex-1" icon={isSyncing ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>}>
+                                    <Button onClick={() => handleGitHubSync(false)} disabled={isSyncing} className="flex-1" icon={isSyncing ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>}> 
                                         {isSyncing ? '同步中...' : '立即同步到 GitHub'}
                                     </Button>
                                     <Button onClick={handleExportTs} variant="secondary" className="px-4" title="手动下载备份">
