@@ -23,8 +23,60 @@ const KEYS = {
   CONFIG: 'ew_site_config',
   ADMIN: 'ew_admin_logged_in',
   THEME: 'ew_theme_mode',
-  GITHUB_CONFIG: 'ew_github_config'
+  GITHUB_CONFIG: 'ew_github_config',
+  DATA_HISTORY: 'ew_data_history',
+  LAST_SEEN_PUBLISHED_HASH: 'ew_last_seen_published_hash'
 };
+
+interface DataBundle {
+  posts: Post[];
+  categories: string[];
+  announcements: Announcement[];
+  links: FriendlyLink[];
+  siteConfig: SiteConfig;
+}
+
+interface VersionSnapshot extends DataBundle {
+  hash: string;
+  savedAt: number;
+  source: 'published' | 'local' | 'history';
+}
+
+interface VersionChoice {
+  id: string;
+  title: string;
+  description: string;
+  snapshot: VersionSnapshot;
+}
+
+// 轻量字符串哈希（避免引入额外依赖）
+const hashString = (input: string) => {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash << 5) + hash) + input.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return `h${(hash >>> 0).toString(16)}`;
+};
+
+const createSnapshot = (
+  bundle: DataBundle,
+  source: VersionSnapshot['source'],
+  savedAt = Date.now()
+): VersionSnapshot => {
+  const hash = hashString(JSON.stringify(bundle));
+  return { ...bundle, hash, source, savedAt };
+};
+
+const applyBundleToStorage = (bundle: DataBundle) => {
+  localStorage.setItem(KEYS.POSTS, JSON.stringify(bundle.posts));
+  localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(bundle.categories));
+  localStorage.setItem(KEYS.ANNOUNCEMENTS, JSON.stringify(bundle.announcements));
+  localStorage.setItem(KEYS.LINKS, JSON.stringify(bundle.links));
+  localStorage.setItem(KEYS.CONFIG, JSON.stringify(bundle.siteConfig));
+};
+
+const formatVersionTime = (timestamp: number) => new Date(timestamp).toLocaleString();
 
 interface GitHubConfig {
   username: string;
@@ -333,6 +385,70 @@ const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (key
             {isLoading ? '验证中...' : '授权登录'}
           </Button>
           <button onClick={onClose} className="w-full text-xs text-gray-400 py-2">取消访问</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const VersionConflictModal: React.FC<{
+  isOpen: boolean;
+  choices: VersionChoice[];
+  onConfirm: (choice: VersionChoice) => void;
+}> = ({ isOpen, choices, onConfirm }) => {
+  const [selectedId, setSelectedId] = useState('');
+
+  useEffect(() => {
+    if (!isOpen || choices.length === 0) return;
+    setSelectedId(choices[0].id);
+  }, [isOpen, choices]);
+
+  if (!isOpen) return null;
+
+  const selected = choices.find(c => c.id === selectedId) || choices[0];
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+      <div className="bg-white dark:bg-slate-800 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-bold font-serif text-zine-blue dark:text-white flex items-center gap-2">
+            <AlertCircle size={18} className="text-zine-pink" />
+            检测到多版本数据，请选择要采用的版本
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">你当前设备存在未同步数据，同时线上也有新更新。请选择要保留的版本。</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
+          <div className="max-h-[360px] overflow-y-auto border-r border-gray-100 dark:border-gray-700">
+            {choices.map(choice => (
+              <button
+                key={choice.id}
+                onClick={() => setSelectedId(choice.id)}
+                className={`w-full text-left px-4 py-4 border-b border-gray-100 dark:border-gray-700 transition-colors ${selectedId === choice.id ? 'bg-zine-blue/5 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700/40'}`}
+              >
+                <div className="font-bold text-sm text-zine-blue dark:text-gray-100">{choice.title}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{choice.description}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="p-4 space-y-3">
+            <h4 className="font-bold text-sm text-zine-blue dark:text-gray-100">版本对比</h4>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="bg-gray-50 dark:bg-slate-700/40 rounded-lg p-3">文章数：<span className="font-bold">{selected.snapshot.posts.length}</span></div>
+              <div className="bg-gray-50 dark:bg-slate-700/40 rounded-lg p-3">分区数：<span className="font-bold">{selected.snapshot.categories.length}</span></div>
+              <div className="bg-gray-50 dark:bg-slate-700/40 rounded-lg p-3">公告数：<span className="font-bold">{selected.snapshot.announcements.length}</span></div>
+              <div className="bg-gray-50 dark:bg-slate-700/40 rounded-lg p-3">友链数：<span className="font-bold">{selected.snapshot.links.length}</span></div>
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              站点名：<span className="font-bold text-zine-blue dark:text-gray-100">{selected.snapshot.siteConfig.siteName}</span>
+            </div>
+            <div className="text-xs text-gray-400 font-mono break-all">Hash: {selected.snapshot.hash}</div>
+
+            <Button className="w-full mt-2" onClick={() => onConfirm(selected)}>
+              采用该版本
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -1174,6 +1290,92 @@ export const App: React.FC = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
   const [hitokoto, setHitokoto] = useState<{ text: string; from: string } | null>(null);
+  const [versionChoices, setVersionChoices] = useState<VersionChoice[]>([]);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const hasReconciledRef = useRef(false);
+
+  const publishedSnapshot = useMemo(() => createSnapshot({
+    posts: INITIAL_POSTS,
+    categories: DEFAULT_CATEGORIES,
+    announcements: INITIAL_ANNOUNCEMENTS,
+    links: INITIAL_LINKS,
+    siteConfig: DEFAULT_SITE_CONFIG
+  }, 'published'), []);
+
+  const applySnapshotToState = (snapshot: VersionSnapshot) => {
+    setPosts(snapshot.posts);
+    setCategories(snapshot.categories);
+    setAnnouncements(snapshot.announcements);
+    setLinks(snapshot.links);
+    setSiteConfig(snapshot.siteConfig);
+    applyBundleToStorage(snapshot);
+  };
+
+  const buildCurrentLocalSnapshot = () => createSnapshot({
+    posts,
+    categories,
+    announcements,
+    links,
+    siteConfig
+  }, 'local');
+
+  useEffect(() => {
+    if (hasReconciledRef.current) return;
+
+    const localSnapshot = buildCurrentLocalSnapshot();
+    const lastSeenPublishedHash = localStorage.getItem(KEYS.LAST_SEEN_PUBLISHED_HASH);
+
+    // 首次运行：记录当前发布版本基线
+    if (!lastSeenPublishedHash) {
+      localStorage.setItem(KEYS.LAST_SEEN_PUBLISHED_HASH, publishedSnapshot.hash);
+      hasReconciledRef.current = true;
+      return;
+    }
+
+    // 线上发布版本未变化，不处理
+    if (lastSeenPublishedHash === publishedSnapshot.hash) {
+      hasReconciledRef.current = true;
+      return;
+    }
+
+    // 本地等于旧发布版本 => 自动升级到新发布版本（解决“另一个设备还是旧缓存”）
+    if (localSnapshot.hash === lastSeenPublishedHash) {
+      applySnapshotToState(publishedSnapshot);
+      localStorage.setItem(KEYS.LAST_SEEN_PUBLISHED_HASH, publishedSnapshot.hash);
+      setSyncNotice('检测到新发布版本，已自动更新到最新内容。');
+      hasReconciledRef.current = true;
+      return;
+    }
+
+    // 本地已是新发布版本，只更新基线即可
+    if (localSnapshot.hash === publishedSnapshot.hash) {
+      localStorage.setItem(KEYS.LAST_SEEN_PUBLISHED_HASH, publishedSnapshot.hash);
+      hasReconciledRef.current = true;
+      return;
+    }
+
+    // 本地有未同步变更 + 线上也有更新 => 进入版本选择
+    const history = loadState<VersionSnapshot[]>(KEYS.DATA_HISTORY, []);
+    const dedup = new Map<string, VersionChoice>();
+
+    const pushChoice = (snapshot: VersionSnapshot, title: string, description: string) => {
+      if (dedup.has(snapshot.hash)) return;
+      dedup.set(snapshot.hash, { id: snapshot.hash, title, description, snapshot });
+    };
+
+    pushChoice(publishedSnapshot, '线上最新版本（推荐）', `发布时间：${formatVersionTime(publishedSnapshot.savedAt)}`);
+    pushChoice(localSnapshot, '当前设备本地版本', `本地时间：${formatVersionTime(localSnapshot.savedAt)}`);
+    history.slice(0, 6).forEach((item, idx) => {
+      pushChoice(
+        { ...item, source: 'history' },
+        `本地历史版本 #${idx + 1}`,
+        `保存时间：${formatVersionTime(item.savedAt)}`
+      );
+    });
+
+    setVersionChoices(Array.from(dedup.values()));
+    hasReconciledRef.current = true;
+  }, [publishedSnapshot]);
 
   useEffect(() => localStorage.setItem(KEYS.POSTS, JSON.stringify(posts)), [posts]);
   useEffect(() => localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(categories)), [categories]);
@@ -1181,6 +1383,21 @@ export const App: React.FC = () => {
   useEffect(() => localStorage.setItem(KEYS.LINKS, JSON.stringify(links)), [links]);
   useEffect(() => localStorage.setItem(KEYS.CONFIG, JSON.stringify(siteConfig)), [siteConfig]);
   useEffect(() => localStorage.setItem(KEYS.ADMIN, JSON.stringify(isAdmin)), [isAdmin]);
+
+  // 保存本地版本历史，支持出现冲突时“多版本比较并选择”
+  useEffect(() => {
+    if (!hasReconciledRef.current) return;
+    const snapshot = buildCurrentLocalSnapshot();
+    const history = loadState<VersionSnapshot[]>(KEYS.DATA_HISTORY, []);
+    if (history[0]?.hash === snapshot.hash) return;
+
+    const nextHistory = [
+      { ...snapshot, savedAt: Date.now(), source: 'local' as const },
+      ...history.filter(item => item.hash !== snapshot.hash)
+    ].slice(0, 8);
+
+    localStorage.setItem(KEYS.DATA_HISTORY, JSON.stringify(nextHistory));
+  }, [posts, categories, announcements, links, siteConfig]);
   
   // Theme Toggle Handler
   const toggleTheme = () => {
@@ -1283,6 +1500,13 @@ export const App: React.FC = () => {
   
   const allTags = Array.from(new Set(posts.flatMap(p => p.tags)));
 
+  const handleVersionChoiceConfirm = (choice: VersionChoice) => {
+    applySnapshotToState(choice.snapshot);
+    localStorage.setItem(KEYS.LAST_SEEN_PUBLISHED_HASH, publishedSnapshot.hash);
+    setVersionChoices([]);
+    setSyncNotice(`已采用：${choice.title}`);
+  };
+
   return (
     <HashRouter>
         <div className={`min-h-screen flex flex-col transition-colors duration-500 bg-zine-paper dark:bg-dark-bg ${isDark ? 'dark' : ''}`}>
@@ -1352,6 +1576,19 @@ export const App: React.FC = () => {
                 onClose={() => setEditor({ ...editor, isOpen: false })} 
                 onSave={handleSavePost} 
              />
+
+             <VersionConflictModal
+                isOpen={versionChoices.length > 0}
+                choices={versionChoices}
+                onConfirm={handleVersionChoiceConfirm}
+             />
+
+             {syncNotice && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] bg-zine-blue text-white px-4 py-2 rounded-full shadow-lg text-sm animate-in fade-in duration-300">
+                  {syncNotice}
+                  <button className="ml-3 text-white/80 hover:text-white" onClick={() => setSyncNotice(null)}>×</button>
+                </div>
+             )}
         </div>
     </HashRouter>
   );
