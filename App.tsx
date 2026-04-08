@@ -84,6 +84,7 @@ interface GitHubConfig {
   repo: string;
   branch: string;
   filePath: string;
+  assetPath: string;
   token: string;
   autoSync: boolean;
   syncInterval: number; // minutes
@@ -94,10 +95,37 @@ const DEFAULT_GITHUB_CONFIG: GitHubConfig = {
   repo: '',
   branch: 'main',
   filePath: 'src/types.ts',
+  assetPath: 'public/uploads',
   token: '',
   autoSync: false,
   syncInterval: 30
 };
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+};
+
+const sanitizeFileName = (name: string) => {
+  const dotIndex = name.lastIndexOf('.');
+  const base = (dotIndex >= 0 ? name.slice(0, dotIndex) : name)
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'image';
+  const ext = dotIndex >= 0 ? name.slice(dotIndex).toLowerCase().replace(/[^a-z0-9.]/g, '') : '';
+  return `${base}${ext}`;
+};
+
+const trimSlashes = (value: string) => value.replace(/^\/+|\/+$/g, '');
 
 async function digestMessage(message: string) {
   const msgUint8 = new TextEncoder().encode(message);
@@ -1026,15 +1054,26 @@ const Dashboard: React.FC<{
                                             className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
                                         />
                                     </div>
-                                    <div>
+                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 mb-1">文件路径</label>
                                         <input 
                                             value={ghConfig.filePath}
                                             onChange={e => setGhConfig({...ghConfig, filePath: e.target.value})}
                                             className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
                                         />
-                                    </div>
-                                </div>
+                                     </div>
+                                 </div>
+
+                                 <div>
+                                     <label className="block text-xs font-bold text-gray-400 mb-1">图片上传路径</label>
+                                     <input 
+                                         value={ghConfig.assetPath}
+                                         onChange={e => setGhConfig({...ghConfig, assetPath: e.target.value})}
+                                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
+                                         placeholder="public/uploads"
+                                     />
+                                     <p className="mt-1 text-[10px] text-gray-400">上传后将生成 GitHub Raw 图片地址，不再把图片存进本地存储。</p>
+                                 </div>
 
                                 <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg flex items-center justify-between">
                                      <div className="flex items-center gap-2">
@@ -1483,6 +1522,43 @@ export const App: React.FC = () => {
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const hasReconciledRef = useRef(false);
 
+  const uploadImageToGitHub = async (file: File) => {
+    const ghConfig = loadState<GitHubConfig>(KEYS.GITHUB_CONFIG, DEFAULT_GITHUB_CONFIG);
+    if (!ghConfig.username || !ghConfig.repo || !ghConfig.token) {
+      throw new Error('请先在设置中完善 GitHub 用户名、仓库名和 Token。');
+    }
+
+    const assetBasePath = trimSlashes(ghConfig.assetPath || 'public/uploads');
+    const datePrefix = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
+    const safeName = sanitizeFileName(file.name || 'image');
+    const uniqueName = `${Date.now()}-${safeName}`;
+    const uploadPath = `${assetBasePath}/${datePrefix}/${uniqueName}`;
+    const apiUrl = `https://api.github.com/repos/${ghConfig.username}/${ghConfig.repo}/contents/${uploadPath}`;
+    const content = arrayBufferToBase64(await file.arrayBuffer());
+
+    const putRes = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${ghConfig.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: `Upload image: ${uniqueName}`,
+        content,
+        branch: ghConfig.branch
+      })
+    });
+
+    if (!putRes.ok) {
+      const errData = await putRes.json().catch(() => null);
+      throw new Error(errData?.message || '图片上传失败');
+    }
+
+    const publicPath = trimSlashes(uploadPath.replace(/^public\//, ''));
+    return `https://raw.githubusercontent.com/${ghConfig.username}/${ghConfig.repo}/${ghConfig.branch}/${publicPath}`;
+  };
+
   const publishedSnapshot = useMemo(() => createSnapshot({
     posts: INITIAL_POSTS,
     categories: DEFAULT_CATEGORIES,
@@ -1765,6 +1841,7 @@ export const App: React.FC = () => {
                 initialData={editor.currentPost} 
                 categories={categories}
                 allTags={allTags}
+                onUploadImage={uploadImageToGitHub}
                 onClose={() => setEditor({ ...editor, isOpen: false })} 
                 onSave={handleSavePost} 
              />

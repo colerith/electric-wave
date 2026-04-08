@@ -14,6 +14,7 @@ interface EditorModalProps {
   initialData: Post | null;
   categories: string[];
   allTags: string[]; // Receive available tags
+  onUploadImage: (file: File) => Promise<string>;
   onClose: () => void;
   onSave: (post: Post) => void;
 }
@@ -45,6 +46,7 @@ export const EditorModal: React.FC<EditorModalProps> = ({
   initialData,
   categories,
   allTags,
+  onUploadImage,
   onClose,
   onSave
 }) => {
@@ -66,6 +68,7 @@ export const EditorModal: React.FC<EditorModalProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTarget, setUploadTarget] = useState<'cover' | 'content' | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -165,16 +168,22 @@ export const EditorModal: React.FC<EditorModalProps> = ({
       const file = e.target.files?.[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          const result = event.target?.result as string;
+      setIsUploadingImage(true);
+      onUploadImage(file)
+        .then((url) => {
           if (uploadTarget === 'cover') {
-              setFormData(prev => ({ ...prev, coverImage: result }));
+            setFormData(prev => ({ ...prev, coverImage: url }));
           } else if (uploadTarget === 'content') {
-              insertMarkdown(`\n![图片](${result})\n`);
+            insertMarkdown(`\n![图片](${url})\n`);
           }
-      };
-      reader.readAsDataURL(file);
+        })
+        .catch((error: Error) => {
+          alert(error.message || '图片上传失败');
+        })
+        .finally(() => {
+          setIsUploadingImage(false);
+          setUploadTarget(null);
+        });
   };
 
   return (
@@ -237,7 +246,7 @@ export const EditorModal: React.FC<EditorModalProps> = ({
                              <button onClick={() => insertMarkdown('[链接文字](url)')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="链接"><Link size={14}/></button>
                              <button onClick={() => insertMarkdown('```\n', '\n```')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="代码块"><Code size={14}/></button>
                              <button onClick={() => insertMarkdown('\n\n---\n\n')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="分割线"><Minus size={14}/></button>
-                             <button onClick={() => triggerUpload('content')} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded" title="插入图片"><ImageIcon size={14}/></button>
+                              <button onClick={() => triggerUpload('content')} disabled={isUploadingImage} className="p-1.5 text-gray-400 hover:text-zine-blue dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded disabled:opacity-50 disabled:cursor-not-allowed" title="插入图片">{isUploadingImage ? <Loader2 size={14} className="animate-spin"/> : <ImageIcon size={14}/>}</button>
                          </div>
                      )}
                   </div>
@@ -291,11 +300,12 @@ export const EditorModal: React.FC<EditorModalProps> = ({
                         placeholder="https://... 或点击上传"
                         className="flex-1 p-3 bg-white dark:bg-slate-800 dark:text-white border border-gray-200 dark:border-gray-700 outline-none focus:border-zine-blue text-sm truncate"
                      />
-                     <Button type="button" variant="secondary" onClick={() => triggerUpload('cover')} className="!px-3" title="上传本地图片">
-                        <Upload size={14} />
-                        <span className="hidden sm:inline ml-1">上传</span>
+                     <Button type="button" variant="secondary" onClick={() => triggerUpload('cover')} disabled={isUploadingImage} className="!px-3" title="上传到 GitHub">
+                         {isUploadingImage ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                         <span className="hidden sm:inline ml-1">{isUploadingImage ? '上传中' : '上传'}</span>
                      </Button>
-                 </div>
+                  </div>
+                  <p className="text-[10px] text-gray-400">本地图片会先上传到你配置的 GitHub 仓库，再写入图片链接。</p>
                  
                  {formData.coverImage && (
                      <div className="aspect-video w-full rounded overflow-hidden bg-gray-100 dark:bg-slate-900 border border-gray-200 dark:border-gray-700">
