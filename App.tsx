@@ -1840,7 +1840,12 @@ const HomeWithNavigation: React.FC<{
 
                 {/* Hitokoto Container: Pushed to bottom on mobile, self-end on desktop */}
                 <div className="max-w-4xl flex-1 relative z-10 w-full pt-14 md:pt-28">
-                    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zine-blue/5 dark:bg-blue-900/20 text-zine-blue dark:text-blue-300 text-xs font-bold mb-8 border border-zine-blue/10 dark:border-blue-900/30">今日电波</span>
+                    <div className="mb-8 inline-flex flex-col gap-2">
+                      <h2 className="text-xl md:text-2xl font-serif font-black tracking-[0.08em] text-zine-blue dark:text-blue-200 leading-none">
+                        今日电波
+                      </h2>
+                      <span className="h-[2px] w-24 bg-gradient-to-r from-zine-blue via-zine-pink to-transparent dark:from-blue-300 dark:via-pink-300 dark:to-transparent" />
+                    </div>
                     {todayBadges.length > 0 && (
                       <div className="flex flex-wrap gap-2.5 mb-5">
                         {todayBadges.map((badge) => (
