@@ -645,18 +645,13 @@ const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: 
                     <div>
                         <h4 className="font-serif font-bold text-zine-blue dark:text-gray-200 mb-4 flex items-center gap-2"><Globe size={16}/> 站点统计</h4>
                         <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400 font-serif">
-                             <div className="flex items-center gap-2">
-                                <BarChart3 size={14} className="text-zine-pink" />
-                                {/* Busuanzi Unique Visitor Counter */}
-                                <span id="busuanzi_container_site_uv" style={{ display: 'none' }}>
-                                    访客数: <span id="busuanzi_value_site_uv" className="font-bold text-zine-blue dark:text-white">--</span>
-                                </span>
-                             </div>
-                             <div>
-                                 {/* Busuanzi Page View Counter */}
-                                 <span id="busuanzi_container_site_pv" style={{ display: 'none' }}>
-                                    总浏览量: <span id="busuanzi_value_site_pv" className="font-bold text-zine-blue dark:text-white">--</span>
-                                 </span>
+                           <div className="flex items-center gap-2">
+                             <Eye size={14} className="text-zine-pink" />
+                             访问统计: <span className="font-bold text-zine-blue dark:text-white">Cloudflare Web Analytics</span>
+                           </div>
+                           <div className="flex items-center gap-2">
+                            <BarChart3 size={14} className="text-zine-pink" />
+                            详细流量: <span className="font-bold text-zine-blue dark:text-white">Cloudflare 控制台</span>
                              </div>
                              <div className="flex items-center gap-2">
                                  <Calendar size={14} className="text-zine-pink" />
@@ -1569,6 +1564,22 @@ export const App: React.FC = () => {
   const [versionChoices, setVersionChoices] = useState<VersionChoice[]>([]);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const hasReconciledRef = useRef(false);
+
+  useEffect(() => {
+    const token = document
+      .querySelector('meta[name="cf-beacon-token"]')
+      ?.getAttribute('content')
+      ?.trim();
+
+    if (!token) return;
+    if (document.querySelector('script[data-cf-beacon]')) return;
+
+    const script = document.createElement('script');
+    script.defer = true;
+    script.src = 'https://static.cloudflareinsights.com/beacon.min.js';
+    script.setAttribute('data-cf-beacon', JSON.stringify({ token }));
+    document.head.appendChild(script);
+  }, []);
 
   const uploadImageToGitHub = async (file: File) => {
     const ghConfig = loadState<GitHubConfig>(KEYS.GITHUB_CONFIG, DEFAULT_GITHUB_CONFIG);
