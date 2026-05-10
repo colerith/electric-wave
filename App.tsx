@@ -647,11 +647,11 @@ const Footer: React.FC<{ links: FriendlyLink[]; isAdmin: boolean; visitorCount: 
                         <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400 font-serif">
                            <div className="flex items-center gap-2">
                              <Eye size={14} className="text-zine-pink" />
-                             访问统计: <span className="font-bold text-zine-blue dark:text-white">Cloudflare Web Analytics</span>
+                             访客数: <span id="busuanzi_value_site_uv" className="font-bold text-zine-blue dark:text-white">--</span>
                            </div>
                            <div className="flex items-center gap-2">
                             <BarChart3 size={14} className="text-zine-pink" />
-                            详细流量: <span className="font-bold text-zine-blue dark:text-white">Cloudflare 控制台</span>
+                            总浏览量: <span id="busuanzi_value_site_pv" className="font-bold text-zine-blue dark:text-white">--</span>
                              </div>
                              <div className="flex items-center gap-2">
                                  <Calendar size={14} className="text-zine-pink" />
