@@ -515,7 +515,7 @@ const FilterDropdown: React.FC<{
   const current = options.find(o => o.value === value)?.label ?? options[0]?.label ?? '';
 
   return (
-    <div ref={wrapRef} className={`relative ${className}`}>
+    <div ref={wrapRef} className={`relative z-[80] ${className}`}>
       <button
         type="button"
         onClick={() => setOpen(prev => !prev)}
@@ -526,7 +526,7 @@ const FilterDropdown: React.FC<{
       </button>
 
       <div
-        className={`absolute left-0 mt-2 w-full z-40 origin-top rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md shadow-2xl transition-all duration-300 ${open ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-y-95 -translate-y-1 pointer-events-none'}`}
+        className={`absolute left-0 mt-2 w-full z-[90] origin-top rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md shadow-2xl transition-all duration-300 ${open ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-y-95 -translate-y-1 pointer-events-none'}`}
       >
         {options.map(option => (
           <button
@@ -1360,7 +1360,7 @@ const HomeWithNavigation: React.FC<{
     const pagedRegularPosts = regularPosts.slice((currentPage - 1) * POSTS_PER_PAGE, currentPage * POSTS_PER_PAGE);
 
     return (
-        <main className="max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1 relative z-10">
+        <main className="w-full max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1 relative z-10">
             <section className="mb-24 flex flex-col justify-between md:flex-row md:items-end md:justify-between border-b border-zine-blue/10 dark:border-gray-700 pb-16 md:relative min-h-[400px]">
                 
                 {/* ECG Visualizer: In-flow on mobile with smaller height, absolute on desktop */}
@@ -1389,7 +1389,7 @@ const HomeWithNavigation: React.FC<{
             <AnnouncementGallery announcements={announcements} />
 
             {/* Sticky Category Filter */}
-             <div className="flex flex-wrap gap-2 mb-12 sticky top-20 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md py-4 -mx-6 px-6 md:mx-0 md:px-0 md:bg-transparent md:static transition-colors">
+             <div className="relative isolate overflow-visible flex flex-wrap gap-2 mb-12 sticky top-20 z-[70] bg-white/80 dark:bg-slate-900/80 backdrop-blur-md py-4 -mx-6 px-6 md:mx-0 md:px-0 md:bg-transparent md:static transition-colors">
                  <button 
                     onClick={() => setSearchQuery('')}
                     className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${!searchQuery ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
@@ -1458,13 +1458,13 @@ const HomeWithNavigation: React.FC<{
             )}
 
             {/* Regular Posts Grid */}
-            <section className="animate-in slide-in-from-bottom-8 duration-700">
+            <section className="relative z-0 animate-in slide-in-from-bottom-8 duration-700">
                 <h3 className="text-sm font-bold text-gray-400 mb-8 uppercase tracking-widest">
                     {searchQuery ? (categories.includes(searchQuery) ? `${searchQuery} 分区` : '搜索结果') : '最新收录'}
                 </h3>
                 {regularPosts.length > 0 ? (
                     <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-8">
                         {pagedRegularPosts.map(post => (
                             <GalleryCard 
                                 key={post.id} 
