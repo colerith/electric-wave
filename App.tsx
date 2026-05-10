@@ -301,6 +301,25 @@ const getTodayWaveBadges = (date: Date) => {
   return labels;
 };
 
+const getWaveBadgeStyle = (badge: string) => {
+  if (badge.startsWith('中国农历')) {
+    return {
+      wrapper: 'border-amber-300/70 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-900 shadow-[0_6px_20px_-14px_rgba(217,119,6,0.75)] dark:border-amber-700/60 dark:bg-gradient-to-r dark:from-amber-950/50 dark:to-orange-950/40 dark:text-amber-200',
+      dot: 'bg-amber-500'
+    };
+  }
+  if (badge.startsWith('节气')) {
+    return {
+      wrapper: 'border-emerald-300/70 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-900 shadow-[0_6px_20px_-14px_rgba(5,150,105,0.75)] dark:border-emerald-700/60 dark:bg-gradient-to-r dark:from-emerald-950/45 dark:to-teal-950/35 dark:text-emerald-200',
+      dot: 'bg-emerald-500'
+    };
+  }
+  return {
+    wrapper: 'border-fuchsia-300/70 bg-gradient-to-r from-fuchsia-50 to-rose-50 text-fuchsia-900 shadow-[0_6px_20px_-14px_rgba(190,24,93,0.75)] dark:border-fuchsia-700/60 dark:bg-gradient-to-r dark:from-fuchsia-950/40 dark:to-rose-950/30 dark:text-fuchsia-200',
+    dot: 'bg-fuchsia-500'
+  };
+};
+
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   const bytes = new Uint8Array(buffer);
   let binary = '';
@@ -1862,9 +1881,13 @@ const HomeWithNavigation: React.FC<{
                 <div className="max-w-4xl flex-1 relative z-10 w-full pt-12 md:pt-24">
                     <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zine-blue/5 dark:bg-blue-900/20 text-zine-blue dark:text-blue-300 text-xs font-bold mb-8 border border-zine-blue/10 dark:border-blue-900/30">今日电波</span>
                     {todayBadges.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-4">
+                      <div className="flex flex-wrap gap-2.5 mb-5">
                         {todayBadges.map((badge) => (
-                          <span key={badge} className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wide bg-white/70 dark:bg-slate-800/70 border border-zine-blue/20 dark:border-blue-800/60 text-zine-blue dark:text-blue-200">
+                          <span
+                            key={badge}
+                            className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-[11px] font-bold tracking-[0.08em] border transition-all duration-300 hover:-translate-y-0.5 ${getWaveBadgeStyle(badge).wrapper}`}
+                          >
+                            <i className={`w-1.5 h-1.5 rounded-full animate-pulse ${getWaveBadgeStyle(badge).dot}`} />
                             {badge}
                           </span>
                         ))}
