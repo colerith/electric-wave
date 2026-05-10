@@ -1840,13 +1840,21 @@ const HomeWithNavigation: React.FC<{
 
                 {/* Hitokoto Container: Pushed to bottom on mobile, self-end on desktop */}
                 <div className="max-w-4xl flex-1 relative z-10 w-full pt-14 md:pt-28">
-                    <div className="mb-8 inline-flex items-center gap-3 opacity-75">
-                      <span className="w-8 h-8 rounded-full flex items-center justify-center bg-zine-blue/10 text-zine-blue/80 dark:bg-blue-900/25 dark:text-blue-200/80 ring-1 ring-zine-blue/15 dark:ring-blue-600/30">
-                        <Radio size={14} />
-                      </span>
-                      <h2 className="text-2xl md:text-3xl font-serif font-black italic tracking-[0.1em] text-zine-blue/75 dark:text-blue-200/75 leading-none drop-shadow-[0_1px_0_rgba(255,255,255,0.45)] dark:drop-shadow-none">
-                        今日电波
-                      </h2>
+                    <div className="mb-8 inline-flex flex-col relative pr-10">
+                      <span className="absolute -right-2 -top-3 w-16 h-16 rounded-full border border-zine-blue/10 dark:border-blue-400/20" />
+                      <div className="inline-flex items-center gap-2 leading-none">
+                        <span className="w-5 h-[3px] rounded-full bg-zine-pink/70" />
+                        <span className="text-[18px] md:text-[20px] uppercase tracking-[0.12em] font-serif font-semibold text-zine-blue/80 dark:text-blue-200/80">
+                          Today Wave
+                        </span>
+                        <span className="w-6 h-[3px] rounded-full bg-zine-blue/70" />
+                      </div>
+                      <div className="mt-1 inline-flex items-end gap-2">
+                        <h2 className="text-[28px] md:text-[34px] font-serif font-black italic tracking-[0.08em] text-zine-blue/75 dark:text-blue-200/75 leading-none">
+                          今日电波
+                        </h2>
+                        <span className="mb-[6px] w-14 h-[2px] bg-gradient-to-r from-zine-blue/70 via-zine-pink/70 to-transparent" />
+                      </div>
                     </div>
                     {todayBadges.length > 0 && (
                       <div className="flex flex-wrap gap-2.5 mb-5">
