@@ -1683,7 +1683,7 @@ export const App: React.FC = () => {
       
       const hour = new Date().getHours();
       const shouldBeDark = hour >= 18 || hour < 6;
-      setIsDark(prev => prev !== shouldBeDark ? shouldBeDark : prev);
+      setIsDark((prev: boolean) => (prev !== shouldBeDark ? shouldBeDark : prev));
     };
 
     // Check every minute
