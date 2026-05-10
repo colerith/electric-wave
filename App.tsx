@@ -304,9 +304,9 @@ const getTodayWaveBadges = (date: Date) => {
 const getWaveBadgeStyle = (badge: string) => {
   if (badge.startsWith('中国农历')) {
     return {
-      wrapper: 'border-zine-blue/25 bg-white/75 text-zine-blue dark:border-blue-700/60 dark:bg-slate-900/70 dark:text-blue-200',
-      dot: 'bg-zine-blue',
-      tag: '中历'
+      wrapper: 'border-violet-300/70 bg-gradient-to-r from-violet-50 to-purple-50 text-violet-800 dark:border-violet-700/60 dark:bg-gradient-to-r dark:from-violet-950/35 dark:to-purple-950/30 dark:text-violet-200',
+      dot: 'bg-violet-500',
+      tag: '农历'
     };
   }
   if (badge.startsWith('节气')) {
@@ -321,6 +321,19 @@ const getWaveBadgeStyle = (badge: string) => {
     dot: 'bg-zine-pink',
     tag: '国际'
   };
+};
+
+const getWaveBadgeDisplayText = (badge: string) => {
+  if (badge.startsWith('中国农历')) {
+    return badge.replace(/^中国农历\s*/, '').trim();
+  }
+  if (badge.startsWith('国际节日')) {
+    return badge.replace(/^国际节日\s*/, '').trim();
+  }
+  if (badge.startsWith('节气')) {
+    return badge.replace(/^节气\s*/, '').trim();
+  }
+  return badge;
 };
 
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
@@ -1840,7 +1853,7 @@ const HomeWithNavigation: React.FC<{
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${badgeStyle.dot}`} />
                             <span className="px-1.5 py-0.5 rounded-full bg-white/80 dark:bg-slate-800/80 text-[10px] tracking-wide">{badgeStyle.tag}</span>
-                            <span className="tracking-wide">{badge}</span>
+                            <span className="tracking-wide">{getWaveBadgeDisplayText(badge)}</span>
                           </span>
                             );
                           })()
