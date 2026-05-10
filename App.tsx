@@ -304,21 +304,21 @@ const getTodayWaveBadges = (date: Date) => {
 const getWaveBadgeStyle = (badge: string) => {
   if (badge.startsWith('中国农历')) {
     return {
-      wrapper: 'border-violet-300/70 bg-gradient-to-r from-violet-50 to-purple-50 text-violet-800 dark:border-violet-700/60 dark:bg-gradient-to-r dark:from-violet-950/35 dark:to-purple-950/30 dark:text-violet-200',
-      dot: 'bg-violet-500',
+      wrapper: 'border-[#A9B1F1] bg-[#A9B1F1]/20 text-[#4C5696] dark:border-[#A9B1F1]/80 dark:bg-[#A9B1F1]/25 dark:text-[#C9D0FF]',
+      dot: 'bg-[#A9B1F1]',
       tag: '农历'
     };
   }
   if (badge.startsWith('节气')) {
     return {
-      wrapper: 'border-zine-blue/25 bg-zine-blue/5 text-zine-blue dark:border-blue-700/60 dark:bg-blue-900/20 dark:text-blue-200',
-      dot: 'bg-blue-500',
+      wrapper: 'border-[#D1A8E3] bg-[#D1A8E3]/22 text-[#775A8A] dark:border-[#D1A8E3]/80 dark:bg-[#D1A8E3]/28 dark:text-[#ECD8F4]',
+      dot: 'bg-[#D1A8E3]',
       tag: '节气'
     };
   }
   return {
-    wrapper: 'border-zine-pink/35 bg-zine-pink/10 text-zine-blue dark:border-pink-700/60 dark:bg-pink-900/20 dark:text-pink-200',
-    dot: 'bg-zine-pink',
+    wrapper: 'border-[#F8D8E1] bg-[#F8D8E1]/28 text-[#8A6572] dark:border-[#F8D8E1]/75 dark:bg-[#F8D8E1]/20 dark:text-[#F6DFE8]',
+    dot: 'bg-[#F8D8E1]',
     tag: '国际'
   };
 };
