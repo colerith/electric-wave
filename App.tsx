@@ -1840,11 +1840,13 @@ const HomeWithNavigation: React.FC<{
 
                 {/* Hitokoto Container: Pushed to bottom on mobile, self-end on desktop */}
                 <div className="max-w-4xl flex-1 relative z-10 w-full pt-14 md:pt-28">
-                    <div className="mb-8 inline-flex flex-col gap-2">
-                      <h2 className="text-xl md:text-2xl font-serif font-black tracking-[0.08em] text-zine-blue dark:text-blue-200 leading-none">
+                    <div className="mb-8 inline-flex items-center gap-3 opacity-75">
+                      <span className="w-8 h-8 rounded-full flex items-center justify-center bg-zine-blue/10 text-zine-blue/80 dark:bg-blue-900/25 dark:text-blue-200/80 ring-1 ring-zine-blue/15 dark:ring-blue-600/30">
+                        <Radio size={14} />
+                      </span>
+                      <h2 className="text-2xl md:text-3xl font-serif font-black italic tracking-[0.1em] text-zine-blue/75 dark:text-blue-200/75 leading-none drop-shadow-[0_1px_0_rgba(255,255,255,0.45)] dark:drop-shadow-none">
                         今日电波
                       </h2>
-                      <span className="h-[2px] w-24 bg-gradient-to-r from-zine-blue via-zine-pink to-transparent dark:from-blue-300 dark:via-pink-300 dark:to-transparent" />
                     </div>
                     {todayBadges.length > 0 && (
                       <div className="flex flex-wrap gap-2.5 mb-5">
