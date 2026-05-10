@@ -1845,15 +1845,14 @@ const HomeWithNavigation: React.FC<{
                         today
                       </span>
                       <div className="relative inline-flex items-center gap-2">
-                        <p className="text-zine-blue/75 dark:text-blue-200/70 text-[16px] md:text-[18px] uppercase tracking-[0.18em] font-serif font-semibold leading-none">
+                        <p className="text-zine-blue/80 dark:text-blue-200/75 text-[24px] md:text-[30px] uppercase tracking-[0.2em] font-serif font-bold leading-none">
                           Today Wave
                         </p>
                         <span className="w-2 h-2 rounded-full bg-zine-pink/80" />
                       </div>
-                      <h2 className="relative mt-1 text-zine-blue dark:text-blue-100 text-[34px] md:text-[42px] font-serif font-black tracking-[0.06em] leading-none">
+                      <h2 className="relative mt-1 text-zine-pink/75 dark:text-zine-pink/70 text-[12px] md:text-[13px] uppercase tracking-[0.24em] font-serif font-semibold leading-none">
                         今日电波
                       </h2>
-                      <span className="mt-1 h-[2px] w-16 bg-gradient-to-r from-zine-blue/70 via-zine-pink/70 to-transparent" />
                     </div>
                     {todayBadges.length > 0 && (
                       <div className="flex flex-wrap gap-2.5 mb-5">
