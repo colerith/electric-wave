@@ -105,6 +105,14 @@
     <!-- 不蒜子统计脚本 -->
     <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
     <style>
+      /* Tailwind CDN fallback: ensure these utilities always exist */
+      .to-zine-blue {
+        --tw-gradient-to: #1b3c73 var(--tw-gradient-to-position);
+      }
+      .text-zine-blue\/20 {
+        color: rgb(27 60 115 / 0.2);
+      }
+
       /* Fallback font utilities to avoid stale CDN config/cache issues */
       .font-sans {
         font-family: "Noto Sans SC", sans-serif !important;
