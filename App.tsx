@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { HashRouter, Routes, Route, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { LayoutGrid, List, Plus, LogIn, LogOut, ChevronLeft, ArrowRight, Github, ExternalLink, Trash2, PlusCircle, Eye, Search, ArrowUp, Pin, Settings, LayoutDashboard, Menu, X, RefreshCw, GripVertical, Bell, ChevronRight, ChevronDown, Megaphone, Radio, Edit3, Key, BarChart3, Globe, Link as LinkIcon, ArrowDown, Calendar, Download, Save, Moon, Sun, Waves, Activity, FileCode, ListMusic, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -500,11 +501,32 @@ const FilterDropdown: React.FC<{
   className?: string;
 }> = ({ value, onChange, options, className = '' }) => {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const updateMenuPosition = () => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    setMenuStyle({
+      top: rect.bottom + 8,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 300
+    });
+  };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (!wrapRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setOpen(false);
       }
     };
@@ -512,36 +534,59 @@ const FilterDropdown: React.FC<{
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+
+    const onViewportChange = () => updateMenuPosition();
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('scroll', onViewportChange, true);
+    return () => {
+      window.removeEventListener('resize', onViewportChange);
+      window.removeEventListener('scroll', onViewportChange, true);
+    };
+  }, [open]);
+
   const current = options.find(o => o.value === value)?.label ?? options[0]?.label ?? '';
+
+  const dropdownMenu = open ? (
+    <div
+      ref={menuRef}
+      style={menuStyle}
+      className="fixed origin-top rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md shadow-2xl"
+    >
+      {options.map(option => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => {
+            onChange(option.value);
+            setOpen(false);
+          }}
+          className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value === option.value ? 'bg-zine-blue/10 dark:bg-blue-900/30 text-zine-blue dark:text-blue-200 font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700/60'}`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  ) : null;
 
   return (
     <div ref={wrapRef} className={`relative z-[80] ${className}`}>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen(prev => !prev)}
+        onClick={() => {
+          if (!open) updateMenuPosition();
+          setOpen(prev => !prev);
+        }}
         className="min-w-[180px] px-4 py-2 rounded-full text-sm text-left bg-white/90 dark:bg-slate-800/90 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 shadow-sm hover:border-zine-blue/40 dark:hover:border-zine-pink/50 transition-all duration-300 flex items-center justify-between"
       >
         <span className="truncate">{current}</span>
         <ChevronDown size={16} className={`ml-3 shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      <div
-        className={`absolute left-0 mt-2 w-full z-[90] origin-top rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md shadow-2xl transition-all duration-300 ${open ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-y-95 -translate-y-1 pointer-events-none'}`}
-      >
-        {options.map(option => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => {
-              onChange(option.value);
-              setOpen(false);
-            }}
-            className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value === option.value ? 'bg-zine-blue/10 dark:bg-blue-900/30 text-zine-blue dark:text-blue-200 font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700/60'}`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      {mounted ? createPortal(dropdownMenu, document.body) : dropdownMenu}
     </div>
   );
 };
@@ -1439,7 +1484,7 @@ const HomeWithNavigation: React.FC<{
                     <h3 className="text-sm font-bold text-zine-pink mb-8 uppercase tracking-widest flex items-center gap-2">
                     <span className="w-8 h-px bg-zine-pink"></span> 精选推荐
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
                         {pinnedPosts.map(post => (
                             <div key={post.id} onClick={() => navigate(`/post/${post.id}`)} className="group cursor-pointer">
                                 <div className={`aspect-[2/1] overflow-hidden rounded-sm mb-6 bg-gray-100 dark:bg-slate-800 shadow-sm ${!post.coverImage && 'flex items-center justify-center bg-gradient-to-br from-zine-blue/5 to-zine-pink/5'}`}>
