@@ -1840,21 +1840,19 @@ const HomeWithNavigation: React.FC<{
 
                 {/* Hitokoto Container: Pushed to bottom on mobile, self-end on desktop */}
                 <div className="max-w-4xl flex-1 relative z-10 w-full pt-14 md:pt-28">
-                    <div className="mb-8 inline-flex flex-col relative pr-10">
-                      <span className="absolute -right-2 -top-3 w-16 h-16 rounded-full border border-zine-blue/10 dark:border-blue-400/20" />
-                      <div className="inline-flex items-center gap-2 leading-none">
-                        <span className="w-5 h-[3px] rounded-full bg-zine-pink/70" />
-                        <span className="text-[18px] md:text-[20px] uppercase tracking-[0.12em] font-serif font-semibold text-zine-blue/80 dark:text-blue-200/80">
+                    <div className="mb-8 relative w-fit max-w-full min-w-[320px] px-5 py-3 rounded-sm overflow-hidden bg-white/70 dark:bg-slate-900/35 border border-zine-blue/10 dark:border-blue-300/15 border-b-zine-pink/40 shadow-[0_10px_24px_-22px_rgba(27,60,115,0.65)]">
+                      <span className="absolute inset-x-0 top-0 text-[56px] md:text-[64px] leading-none font-serif italic tracking-[0.02em] text-zine-pink/10 dark:text-zine-pink/15 select-none pointer-events-none -translate-y-1 px-4">
+                        today
+                      </span>
+                      <div className="relative inline-flex items-center gap-2">
+                        <h2 className="text-zine-blue/90 dark:text-blue-100/90 text-[24px] md:text-[30px] uppercase tracking-[0.2em] font-serif font-bold leading-none">
                           Today Wave
-                        </span>
-                        <span className="w-6 h-[3px] rounded-full bg-zine-blue/70" />
-                      </div>
-                      <div className="mt-1 inline-flex items-end gap-2">
-                        <h2 className="text-[28px] md:text-[34px] font-serif font-black italic tracking-[0.08em] text-zine-blue/75 dark:text-blue-200/75 leading-none">
-                          今日电波
                         </h2>
-                        <span className="mb-[6px] w-14 h-[2px] bg-gradient-to-r from-zine-blue/70 via-zine-pink/70 to-transparent" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-zine-pink/90 shadow-[0_0_0_3px_rgba(244,114,182,0.18)]" />
                       </div>
+                      <p className="relative mt-1 text-[12px] uppercase tracking-[0.24em] text-zine-pink/75 dark:text-zine-pink/70">
+                        今日电波
+                      </p>
                     </div>
                     {todayBadges.length > 0 && (
                       <div className="flex flex-wrap gap-2.5 mb-5">
