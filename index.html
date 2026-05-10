@@ -27,55 +27,11 @@
     <!-- 网站图标设置 -->
     <link rel="icon" href="favicon.png" />
     
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;600;700;900&display=swap" rel="stylesheet">
     <!-- 不蒜子统计脚本 -->
     <script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class', // 启用手动切换暗色模式
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['"Noto Sans SC"', 'sans-serif'],
-              serif: ['"Noto Serif SC"', 'serif'],
-            },
-            colors: {
-              'zine-blue': '#1B3C73', // Deep Lapis
-              'zine-blue-light': '#587DBD',
-              'zine-pink': '#FF9EBB', // Risograph Pink
-              'zine-pink-light': '#FFE4EA',
-              'zine-paper': '#FAFAF9', // Warm white
-              'zine-gray': '#E5E5E5',
-              // Dark mode specific colors
-              'dark-bg': '#0f172a',
-              'dark-paper': '#1e293b',
-            },
-            backgroundImage: {
-              'noise': "url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22 opacity=%220.05%22/%3E%3C/svg%3E')",
-            },
-            boxShadow: {
-              'soft': '0 4px 20px -2px rgba(27, 60, 115, 0.1)',
-              'sharp': '4px 4px 0px 0px #1B3C73',
-              'sharp-dark': '4px 4px 0px 0px #FF9EBB',
-            },
-            animation: {
-              'blob': 'blob 10s infinite',
-            },
-            keyframes: {
-              blob: {
-                '0%': { transform: 'translate(0px, 0px) scale(1)' },
-                '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
-                '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
-                '100%': { transform: 'translate(0px, 0px) scale(1)' },
-              }
-            }
-          }
-        }
-      }
-    </script>
     <style>
       /* Prevent layout shifts when scrollbar appears/disappears */
       html {
@@ -360,23 +316,6 @@
       html.dark ::-webkit-scrollbar-thumb { background: #475569; }
       html.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "vite": "https://esm.sh/vite@^7.3.0",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.11.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
-    "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1",
-    "remark-breaks": "https://esm.sh/remark-breaks@^4.0.0"
-  }
-}
-</script>
 </head>
   <body>
     <div class="bg-grain"></div>
@@ -386,7 +325,6 @@
       <div class="blob blob-3"></div>
     </div>
     <div id="root" class="relative z-10"></div>
-    <!-- 显式添加 Vite 入口文件 -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

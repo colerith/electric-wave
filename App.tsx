@@ -1312,10 +1312,13 @@ const HomeWithNavigation: React.FC<{
     const POSTS_PER_PAGE = 20;
 
     const getInitial = (title: string) => {
-        const first = title.trim().charAt(0);
-        if (!first) return '#';
-        const upper = first.toUpperCase();
-        return /[A-Z]/.test(upper) ? upper : '#';
+      const normalized = title.trim().normalize('NFKD').toUpperCase();
+      for (const char of normalized) {
+        if (/[A-Z]/.test(char)) {
+          return char;
+        }
+      }
+      return '#';
     };
 
     const allTagOptions = useMemo(() => Array.from(new Set(posts.flatMap(p => p.tags))).filter(Boolean), [posts]);
