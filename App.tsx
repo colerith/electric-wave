@@ -1840,13 +1840,20 @@ const HomeWithNavigation: React.FC<{
 
                 {/* Hitokoto Container: Pushed to bottom on mobile, self-end on desktop */}
                 <div className="max-w-4xl flex-1 relative z-10 w-full pt-14 md:pt-28">
-                    <div className="mb-8 inline-flex flex-col">
-                      <p className="text-zine-blue/75 dark:text-blue-200/70 text-[16px] md:text-[18px] uppercase tracking-[0.18em] font-serif font-semibold leading-none">
-                        Today Wave
-                      </p>
-                      <h2 className="mt-1 text-zine-blue dark:text-blue-100 text-[34px] md:text-[42px] font-serif font-black tracking-[0.06em] leading-none">
+                    <div className="mb-8 inline-flex flex-col relative pr-6">
+                      <span className="absolute -left-1 -top-3 text-[52px] md:text-[60px] leading-none font-serif italic tracking-[0.02em] text-zine-pink/10 dark:text-zine-pink/15 select-none pointer-events-none">
+                        today
+                      </span>
+                      <div className="relative inline-flex items-center gap-2">
+                        <p className="text-zine-blue/75 dark:text-blue-200/70 text-[16px] md:text-[18px] uppercase tracking-[0.18em] font-serif font-semibold leading-none">
+                          Today Wave
+                        </p>
+                        <span className="w-2 h-2 rounded-full bg-zine-pink/80" />
+                      </div>
+                      <h2 className="relative mt-1 text-zine-blue dark:text-blue-100 text-[34px] md:text-[42px] font-serif font-black tracking-[0.06em] leading-none">
                         今日电波
                       </h2>
+                      <span className="mt-1 h-[2px] w-16 bg-gradient-to-r from-zine-blue/70 via-zine-pink/70 to-transparent" />
                     </div>
                     {todayBadges.length > 0 && (
                       <div className="flex flex-wrap gap-2.5 mb-5">
