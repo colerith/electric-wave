@@ -128,7 +128,6 @@ const DEFAULT_DAILY_WAVE_CONFIG: DailyWaveConfig = {
   items: [
     {
       id: 'fallback-wave',
-      title: '今日电波',
       content: '今天也要好好生活。',
       from: '电波FM',
       tags: ['默认']
@@ -924,9 +923,8 @@ const Dashboard: React.FC<{
     announcements: Announcement[]; 
     links: FriendlyLink[];
     siteConfig: SiteConfig;
-  dailyWaveConfigText: string;
-  onUpdateDailyWaveConfigText: (text: string) => void;
-  onApplyDailyWaveConfigText: () => void;
+  dailyWaveConfig: DailyWaveConfig;
+  onUpdateDailyWaveConfig: (config: DailyWaveConfig) => void;
     onUpdatePosts: (posts: Post[]) => void; 
     onUpdateCategories: (cats: string[]) => void; 
     onUpdateAnnouncements: (anns: Announcement[]) => void; 
@@ -934,11 +932,13 @@ const Dashboard: React.FC<{
     onUpdateSiteConfig: (config: SiteConfig) => void;
     onEditPost: (p: Post) => void; 
     onDeletePost: (id: string) => void; 
-}> = ({ posts, categories, announcements, links, siteConfig, dailyWaveConfigText, onUpdateDailyWaveConfigText, onApplyDailyWaveConfigText, onUpdatePosts, onUpdateCategories, onUpdateAnnouncements, onUpdateLinks, onUpdateSiteConfig, onEditPost, onDeletePost }) => {
-    const [activeTab, setActiveTab] = useState<'posts' | 'announcements' | 'categories' | 'links' | 'settings'>('posts');
+}> = ({ posts, categories, announcements, links, siteConfig, dailyWaveConfig, onUpdateDailyWaveConfig, onUpdatePosts, onUpdateCategories, onUpdateAnnouncements, onUpdateLinks, onUpdateSiteConfig, onEditPost, onDeletePost }) => {
+  const [activeTab, setActiveTab] = useState<'posts' | 'announcements' | 'categories' | 'links' | 'daily-wave' | 'settings'>('posts');
     const [newCategory, setNewCategory] = useState('');
     const [newLink, setNewLink] = useState({ title: '', url: '' });
     const [newAnnouncement, setNewAnnouncement] = useState('');
+  const [selectedWaveId, setSelectedWaveId] = useState('');
+  const [naturalDraft, setNaturalDraft] = useState('');
     
     // GitHub Sync State
     const [ghConfig, setGhConfig] = useState<GitHubConfig>(() => loadState(KEYS.GITHUB_CONFIG, DEFAULT_GITHUB_CONFIG));
@@ -952,6 +952,18 @@ const Dashboard: React.FC<{
         const normal = posts.filter(p => !p.isPinned);
         return [...pinned, ...normal];
     }, [posts]);
+
+    const selectedWave = useMemo(
+      () => dailyWaveConfig.items.find(item => item.id === selectedWaveId) || dailyWaveConfig.items[0] || null,
+      [dailyWaveConfig.items, selectedWaveId]
+    );
+
+    useEffect(() => {
+      if (!dailyWaveConfig.items.length) return;
+      if (!selectedWaveId || !dailyWaveConfig.items.some(item => item.id === selectedWaveId)) {
+        setSelectedWaveId(dailyWaveConfig.items[0].id);
+      }
+    }, [dailyWaveConfig.items, selectedWaveId]);
 
     // Save GitHub config whenever it changes
     useEffect(() => {
@@ -1056,7 +1068,7 @@ const Dashboard: React.FC<{
       try {
         await putTextFileToGitHub(
           ghConfig.dailyWaveConfigPath,
-          dailyWaveConfigText,
+          JSON.stringify(dailyWaveConfig, null, 2),
           'Manual sync: Update daily wave config via Dashboard'
         );
         setSyncStatus({ success: true, message: '每日电波配置已推送到 GitHub', time: new Date().toLocaleTimeString() });
@@ -1066,6 +1078,92 @@ const Dashboard: React.FC<{
       } finally {
         setIsSyncingDailyWave(false);
       }
+    };
+
+    const updateDailyWave = (updater: (prev: DailyWaveConfig) => DailyWaveConfig) => {
+      const next = updater(dailyWaveConfig);
+      onUpdateDailyWaveConfig({ ...next, updatedAt: new Date().toISOString() });
+    };
+
+    const updateSelectedWave = (patch: Partial<DailyWaveEntry>) => {
+      if (!selectedWave) return;
+      updateDailyWave(prev => ({
+        ...prev,
+        items: prev.items.map(item => item.id === selectedWave.id ? { ...item, ...patch } : item)
+      }));
+    };
+
+    const addDailyWaveItem = () => {
+      const id = `wave-${Date.now()}`;
+      const date = toDateKey(new Date());
+      updateDailyWave(prev => ({
+        ...prev,
+        items: [
+          {
+            id,
+            date,
+            content: '在这里写今天的电波内容。',
+            from: '电波FM',
+            tags: []
+          },
+          ...prev.items
+        ]
+      }));
+      setSelectedWaveId(id);
+    };
+
+    const deleteDailyWaveItem = (id: string) => {
+      if (dailyWaveConfig.items.length <= 1) {
+        alert('至少保留一条每日电波。');
+        return;
+      }
+      updateDailyWave(prev => ({
+        ...prev,
+        items: prev.items.filter(item => item.id !== id)
+      }));
+    };
+
+    const applyNaturalDraft = () => {
+      if (!selectedWave || !naturalDraft.trim()) return;
+
+      const lines = naturalDraft.split('\n');
+      let date = selectedWave.date || '';
+      let from = selectedWave.from || '电波FM';
+      let tags = selectedWave.tags || [];
+      let content = selectedWave.content;
+
+      const metaMap: Record<string, string> = {};
+      let bodyStart = -1;
+
+      lines.forEach((line, idx) => {
+        const trimmed = line.trim();
+        if (/^正文[:：]?$/i.test(trimmed)) {
+          bodyStart = idx + 1;
+          return;
+        }
+        const pair = trimmed.match(/^(日期|时间|来源|作者|标签)[:：]\s*(.*)$/);
+        if (pair) {
+          metaMap[pair[1]] = pair[2];
+        }
+      });
+
+      if (bodyStart >= 0) {
+        content = lines.slice(bodyStart).join('\n').trim() || content;
+      } else if (lines.length > 0) {
+        content = lines.join('\n').trim() || content;
+      }
+
+      if (metaMap['日期'] || metaMap['时间']) {
+        const candidate = (metaMap['日期'] || metaMap['时间']).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) date = candidate;
+      }
+      if (metaMap['来源'] || metaMap['作者']) from = (metaMap['来源'] || metaMap['作者']).trim() || from;
+      if (metaMap['标签']) {
+        tags = metaMap['标签'].split(/[,，\s]+/).map(tag => tag.trim()).filter(Boolean);
+      }
+
+      updateSelectedWave({ date: date || undefined, from, tags, content });
+      setNaturalDraft('');
     };
 
     // Helpers for sorting
@@ -1108,6 +1206,7 @@ const Dashboard: React.FC<{
                     <button onClick={() => setActiveTab('announcements')} className={`whitespace-nowrap w-auto md:w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'announcements' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}><Megaphone className="inline mr-2 w-4 h-4"/>公告</button>
                     <button onClick={() => setActiveTab('categories')} className={`whitespace-nowrap w-auto md:w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'categories' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}><List className="inline mr-2 w-4 h-4"/>分区</button>
                     <button onClick={() => setActiveTab('links')} className={`whitespace-nowrap w-auto md:w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'links' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}><LinkIcon className="inline mr-2 w-4 h-4"/>友链</button>
+                    <button onClick={() => setActiveTab('daily-wave')} className={`whitespace-nowrap w-auto md:w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'daily-wave' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}><Waves className="inline mr-2 w-4 h-4"/>每日电波</button>
                     <button onClick={() => setActiveTab('settings')} className={`whitespace-nowrap w-auto md:w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeTab === 'settings' ? 'bg-zine-blue/5 dark:bg-zine-blue/20 text-zine-blue dark:text-blue-300 font-bold' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}><Settings className="inline mr-2 w-4 h-4"/>设置</button>
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
@@ -1230,6 +1329,111 @@ const Dashboard: React.FC<{
                                 ))}
                             </div>
                         </div>
+                    )}
+
+                    {/* Daily Wave Management */}
+                    {activeTab === 'daily-wave' && (
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 min-h-[620px]">
+                        <div className="xl:col-span-1 bg-gray-50 dark:bg-slate-700/30 rounded-xl border border-gray-100 dark:border-gray-700 p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-serif font-bold text-zine-blue dark:text-white">电波条目</h3>
+                            <Button onClick={addDailyWaveItem} className="!py-1.5 !px-3 !text-xs" icon={<Plus size={14}/>}>新增</Button>
+                          </div>
+
+                          <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+                            {dailyWaveConfig.items.map(item => (
+                              <button
+                                key={item.id}
+                                onClick={() => setSelectedWaveId(item.id)}
+                                className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedWave?.id === item.id ? 'border-zine-blue bg-white dark:bg-slate-800' : 'border-transparent bg-white/60 dark:bg-slate-800/60 hover:border-gray-200 dark:hover:border-gray-600'}`}
+                              >
+                                <div className="text-xs text-gray-400 mb-1">{item.date || '未指定日期'}</div>
+                                <div className="text-sm text-zine-blue dark:text-gray-100 line-clamp-2 whitespace-pre-line">{item.content}</div>
+                                <div className="mt-2 flex items-center justify-between">
+                                  <span className="text-[11px] text-gray-400">{item.from || '电波FM'}</span>
+                                  <span
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteDailyWaveItem(item.id);
+                                    }}
+                                    className="text-gray-400 hover:text-red-500"
+                                  >
+                                    <Trash2 size={14}/>
+                                  </span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="xl:col-span-2 bg-gray-50 dark:bg-slate-700/30 rounded-xl border border-gray-100 dark:border-gray-700 p-6 space-y-5">
+                          <div className="flex flex-wrap items-center gap-3 justify-between border-b border-gray-200 dark:border-gray-600 pb-3">
+                            <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white">每日电波编辑器</h3>
+                            <div className="flex items-center gap-2">
+                              <Button onClick={handleSyncDailyWaveConfig} variant="secondary" disabled={isSyncingDailyWave} icon={isSyncingDailyWave ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>}>{isSyncingDailyWave ? '推送中...' : '推送配置到 GitHub'}</Button>
+                            </div>
+                          </div>
+
+                          {selectedWave ? (
+                            <>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-400 mb-1">日期 (YYYY-MM-DD)</label>
+                                  <input
+                                    value={selectedWave.date || ''}
+                                    onChange={(e) => updateSelectedWave({ date: e.target.value || undefined })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white"
+                                    placeholder="留空则自动轮播"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-400 mb-1">来源</label>
+                                  <input
+                                    value={selectedWave.from || ''}
+                                    onChange={(e) => updateSelectedWave({ from: e.target.value })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white"
+                                    placeholder="电波FM"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-400 mb-1">标签 (逗号分隔)</label>
+                                  <input
+                                    value={(selectedWave.tags || []).join(', ')}
+                                    onChange={(e) => updateSelectedWave({ tags: e.target.value.split(/[,，]/).map(tag => tag.trim()).filter(Boolean) })}
+                                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white"
+                                    placeholder="每日推送, 节日"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-gray-400 mb-1">正文</label>
+                                <textarea
+                                  value={selectedWave.content}
+                                  onChange={(e) => updateSelectedWave({ content: e.target.value })}
+                                  className="w-full min-h-[240px] px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-serif leading-relaxed dark:text-gray-100"
+                                  placeholder="支持换行与段落。"
+                                />
+                              </div>
+
+                              <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
+                                <label className="block text-xs font-bold text-gray-400 mb-2">自然语言草稿（可含日期/来源/标签/正文）</label>
+                                <textarea
+                                  value={naturalDraft}
+                                  onChange={(e) => setNaturalDraft(e.target.value)}
+                                  className="w-full min-h-[130px] px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-serif dark:text-gray-100"
+                                  placeholder={'示例:\n日期: 2026-05-10\n来源: 电波FM\n标签: 母亲节, 每日推送\n正文:\n今天写给自己的话...'}
+                                />
+                                <div className="mt-3">
+                                  <Button onClick={applyNaturalDraft} icon={<Save size={16}/>}>应用草稿到当前条目</Button>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-sm text-gray-500">暂无可编辑条目，请先新增。</div>
+                          )}
+                        </div>
+                      </div>
                     )}
 
                     {/* Global Settings */}
@@ -1388,35 +1592,6 @@ const Dashboard: React.FC<{
                                 </div>
                             </div>
 
-                            <div className="bg-gray-50 dark:bg-slate-700/30 p-8 rounded-xl border border-gray-100 dark:border-gray-700 space-y-4 xl:col-span-2">
-                                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-600 pb-2">
-                                  <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white">每日电波配置</h3>
-                                  <span className="text-xs text-gray-400">支持换行与分段，按日期每日推送一篇</span>
-                                </div>
-
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                  你可以直接修改 JSON；也可以在浏览器控制台用 <code>window.ewDailyWave</code> 系列方法实时改。
-                                </p>
-
-                                <textarea
-                                  value={dailyWaveConfigText}
-                                  onChange={(e) => onUpdateDailyWaveConfigText(e.target.value)}
-                                  className="w-full min-h-[280px] px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-xs font-mono text-gray-600 dark:text-gray-200"
-                                  spellCheck={false}
-                                />
-
-                                <div className="flex flex-wrap gap-3">
-                                  <Button onClick={onApplyDailyWaveConfigText} icon={<Save size={16} />}>保存到本地并立即生效</Button>
-                                  <Button
-                                    onClick={handleSyncDailyWaveConfig}
-                                    variant="secondary"
-                                    disabled={isSyncingDailyWave}
-                                    icon={isSyncingDailyWave ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>}
-                                  >
-                                    {isSyncingDailyWave ? '推送中...' : '推送配置到 GitHub'}
-                                  </Button>
-                                </div>
-                            </div>
                         </div>
                     )}
                 </div>
@@ -1669,18 +1844,22 @@ const HomeWithNavigation: React.FC<{
     const regularPosts = filteredAndSortedPosts.filter(p => !p.isPinned);
     const totalPages = Math.max(1, Math.ceil(regularPosts.length / POSTS_PER_PAGE));
     const pagedRegularPosts = regularPosts.slice((currentPage - 1) * POSTS_PER_PAGE, currentPage * POSTS_PER_PAGE);
+    const waveParagraphs = useMemo(
+      () => (dailyWave?.content || '').split(/\n{2,}/).map(item => item.trim()).filter(Boolean),
+      [dailyWave?.content]
+    );
 
     return (
         <main className="w-full max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1 relative z-10">
             <section className="mb-24 flex flex-col justify-between md:flex-row md:items-end md:justify-between border-b border-zine-blue/10 dark:border-gray-700 pb-16 md:relative min-h-[400px]">
                 
                 {/* ECG Visualizer: In-flow on mobile with smaller height, absolute on desktop */}
-                <div className="w-full h-[150px] -z-10 overflow-hidden pointer-events-none opacity-40 md:absolute md:top-0 md:left-1/2 md:-translate-x-1/2 md:w-screen md:h-[250px] md:opacity-30">
+                <div className="w-full h-[140px] -z-10 overflow-hidden pointer-events-none opacity-45 md:absolute md:top-4 md:left-1/2 md:-translate-x-1/2 md:w-screen md:h-[180px] md:opacity-40">
                     <ECGVisualizer />
                 </div>
 
                 {/* Hitokoto Container: Pushed to bottom on mobile, self-end on desktop */}
-                <div className="max-w-4xl flex-1 relative z-10 w-full">
+                <div className="max-w-4xl flex-1 relative z-10 w-full pt-12 md:pt-24">
                     <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zine-blue/5 dark:bg-blue-900/20 text-zine-blue dark:text-blue-300 text-xs font-bold mb-8 border border-zine-blue/10 dark:border-blue-900/30">今日电波</span>
                     {todayBadges.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-4">
@@ -1691,14 +1870,13 @@ const HomeWithNavigation: React.FC<{
                         ))}
                       </div>
                     )}
-                    {dailyWave?.title && (
-                      <h2 className="text-lg md:text-2xl font-serif font-black text-zine-blue dark:text-white mb-2">
-                        {dailyWave.title}
-                      </h2>
-                    )}
-                    <p className="text-xl md:text-3xl font-serif font-black text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue dark:from-white dark:via-blue-300 dark:to-white py-3 whitespace-pre-line leading-relaxed">
-                        {dailyWave ? dailyWave.content : '正在接收今天的电波...'}
-                    </p>
+                    <div className="space-y-8 md:space-y-10 py-3">
+                      {(waveParagraphs.length > 0 ? waveParagraphs : ['正在接收今天的电波...']).map((paragraph, index) => (
+                        <p key={`${index}-${paragraph.slice(0, 16)}`} className="text-lg md:text-2xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue dark:from-white dark:via-blue-300 dark:to-white whitespace-pre-line leading-[1.95]">
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
                     <p className="text-lg text-gray-500 dark:text-gray-400 font-serif italic mt-2">
                         —— {dailyWave?.from || '电波FM'}
                     </p>
@@ -2230,9 +2408,8 @@ export const App: React.FC = () => {
                             announcements={announcements} 
                             links={links} 
                             siteConfig={siteConfig}
-                            dailyWaveConfigText={dailyWaveConfigText}
-                            onUpdateDailyWaveConfigText={setDailyWaveConfigText}
-                            onApplyDailyWaveConfigText={applyDailyWaveConfigFromText}
+                          dailyWaveConfig={dailyWaveConfig}
+                          onUpdateDailyWaveConfig={applyDailyWaveConfig}
                             onUpdatePosts={setPosts} 
                             onUpdateCategories={setCategories} 
                             onUpdateAnnouncements={setAnnouncements} 
