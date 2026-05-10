@@ -957,7 +957,6 @@ const Dashboard: React.FC<{
     const [newLink, setNewLink] = useState({ title: '', url: '' });
     const [newAnnouncement, setNewAnnouncement] = useState('');
   const [selectedWaveId, setSelectedWaveId] = useState('');
-  const [naturalDraft, setNaturalDraft] = useState('');
     
     // GitHub Sync State
     const [ghConfig, setGhConfig] = useState<GitHubConfig>(() => loadState(KEYS.GITHUB_CONFIG, DEFAULT_GITHUB_CONFIG));
@@ -1142,48 +1141,6 @@ const Dashboard: React.FC<{
       }));
     };
 
-    const applyNaturalDraft = () => {
-      if (!selectedWave || !naturalDraft.trim()) return;
-
-      const lines = naturalDraft.split('\n');
-      let date = selectedWave.date || '';
-      let from = selectedWave.from || '电波FM';
-      let tags = selectedWave.tags || [];
-      let content = selectedWave.content;
-
-      const metaMap: Record<string, string> = {};
-      let bodyStart = -1;
-
-      lines.forEach((line, idx) => {
-        const trimmed = line.trim();
-        if (/^正文[:：]?$/i.test(trimmed)) {
-          bodyStart = idx + 1;
-          return;
-        }
-        const pair = trimmed.match(/^(日期|时间|来源|作者|标签)[:：]\s*(.*)$/);
-        if (pair) {
-          metaMap[pair[1]] = pair[2];
-        }
-      });
-
-      if (bodyStart >= 0) {
-        content = lines.slice(bodyStart).join('\n').trim() || content;
-      } else if (lines.length > 0) {
-        content = lines.join('\n').trim() || content;
-      }
-
-      if (metaMap['日期'] || metaMap['时间']) {
-        const candidate = (metaMap['日期'] || metaMap['时间']).trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) date = candidate;
-      }
-      if (metaMap['来源'] || metaMap['作者']) from = (metaMap['来源'] || metaMap['作者']).trim() || from;
-      if (metaMap['标签']) {
-        tags = metaMap['标签'].split(/[,，\s]+/).map(tag => tag.trim()).filter(Boolean);
-      }
-
-      updateSelectedWave({ date: date || undefined, from, tags, content });
-      setNaturalDraft('');
-    };
 
     // Helpers for sorting
     const moveItem = <T,>(arr: T[], index: number, direction: 'up' | 'down'): T[] => {
@@ -1435,18 +1392,6 @@ const Dashboard: React.FC<{
                                 />
                               </div>
 
-                              <div className="border-t border-gray-200 dark:border-gray-600 pt-4">
-                                <label className="block text-xs font-bold text-gray-400 mb-2">自然语言草稿（可含日期/来源/标签/正文）</label>
-                                <textarea
-                                  value={naturalDraft}
-                                  onChange={(e) => setNaturalDraft(e.target.value)}
-                                  className="w-full min-h-[130px] px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-serif dark:text-gray-100"
-                                  placeholder={'示例:\n日期: 2026-05-10\n来源: 电波FM\n标签: 母亲节, 每日推送\n正文:\n今天写给自己的话...'}
-                                />
-                                <div className="mt-3">
-                                  <Button onClick={applyNaturalDraft} icon={<Save size={16}/>}>应用草稿到当前条目</Button>
-                                </div>
-                              </div>
                             </>
                           ) : (
                             <div className="text-sm text-gray-500">暂无可编辑条目，请先新增。</div>
