@@ -22,6 +22,7 @@ const KEYS = {
   ANNOUNCEMENTS: 'ew_announcements',
   LINKS: 'ew_links',
   CONFIG: 'ew_site_config',
+  DAILY_WAVE_CONFIG: 'ew_daily_wave_config',
   ADMIN: 'ew_admin_logged_in',
   THEME: 'ew_theme_mode',
   GITHUB_CONFIG: 'ew_github_config',
@@ -85,6 +86,7 @@ interface GitHubConfig {
   repo: string;
   branch: string;
   filePath: string;
+  dailyWaveConfigPath: string;
   assetPath: string;
   token: string;
   autoSync: boolean;
@@ -96,10 +98,208 @@ const DEFAULT_GITHUB_CONFIG: GitHubConfig = {
   repo: '',
   branch: 'main',
   filePath: 'src/types.ts',
+  dailyWaveConfigPath: 'public/daily-wave-config.json',
   assetPath: 'public/uploads',
   token: '',
   autoSync: false,
   syncInterval: 30
+};
+
+interface DailyWaveEntry {
+  id: string;
+  date?: string;
+  title?: string;
+  content: string;
+  from?: string;
+  tags?: string[];
+}
+
+interface DailyWaveConfig {
+  updatedAt?: string;
+  timezone?: string;
+  items: DailyWaveEntry[];
+}
+
+const DAILY_WAVE_CONFIG_URL = '/daily-wave-config.json';
+
+const DEFAULT_DAILY_WAVE_CONFIG: DailyWaveConfig = {
+  updatedAt: '2026-05-10T00:00:00+08:00',
+  timezone: 'Asia/Shanghai',
+  items: [
+    {
+      id: 'fallback-wave',
+      title: '今日电波',
+      content: '今天也要好好生活。',
+      from: '电波FM',
+      tags: ['默认']
+    }
+  ]
+};
+
+const INTERNATIONAL_FIXED_HOLIDAYS: Record<string, string> = {
+  '01-01': '元旦',
+  '02-14': '情人节',
+  '03-08': '妇女节',
+  '04-01': '愚人节',
+  '05-01': '劳动节',
+  '06-01': '儿童节',
+  '10-01': '国庆节',
+  '10-31': '万圣节',
+  '12-24': '平安夜',
+  '12-25': '圣诞节'
+};
+
+const SOLAR_TERM_TABLE = [
+  { name: '小寒', c20: 6.11, c21: 5.4055 },
+  { name: '大寒', c20: 20.84, c21: 20.12 },
+  { name: '立春', c20: 4.6295, c21: 3.87 },
+  { name: '雨水', c20: 19.4599, c21: 18.73 },
+  { name: '惊蛰', c20: 6.3826, c21: 5.63 },
+  { name: '春分', c20: 21.4155, c21: 20.646 },
+  { name: '清明', c20: 5.59, c21: 4.81 },
+  { name: '谷雨', c20: 20.888, c21: 20.1 },
+  { name: '立夏', c20: 6.318, c21: 5.52 },
+  { name: '小满', c20: 21.86, c21: 21.04 },
+  { name: '芒种', c20: 6.5, c21: 5.678 },
+  { name: '夏至', c20: 22.2, c21: 21.37 },
+  { name: '小暑', c20: 7.928, c21: 7.108 },
+  { name: '大暑', c20: 23.65, c21: 22.83 },
+  { name: '立秋', c20: 8.35, c21: 7.5 },
+  { name: '处暑', c20: 23.95, c21: 23.13 },
+  { name: '白露', c20: 8.44, c21: 7.646 },
+  { name: '秋分', c20: 23.822, c21: 23.042 },
+  { name: '寒露', c20: 9.098, c21: 8.318 },
+  { name: '霜降', c20: 24.218, c21: 23.438 },
+  { name: '立冬', c20: 8.218, c21: 7.438 },
+  { name: '小雪', c20: 23.08, c21: 22.36 },
+  { name: '大雪', c20: 7.9, c21: 7.18 },
+  { name: '冬至', c20: 22.6, c21: 21.94 }
+];
+
+const toDateKey = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const parseDailyWaveConfig = (raw: unknown): DailyWaveConfig | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as DailyWaveConfig;
+  if (!Array.isArray(candidate.items) || candidate.items.length === 0) return null;
+
+  const cleanedItems = candidate.items
+    .filter((item): item is DailyWaveEntry => !!item && typeof item.content === 'string' && item.content.trim().length > 0)
+    .map((item, idx) => ({
+      id: item.id || `daily-wave-${idx + 1}`,
+      date: item.date,
+      title: item.title,
+      content: item.content,
+      from: item.from,
+      tags: Array.isArray(item.tags) ? item.tags : []
+    }));
+
+  if (cleanedItems.length === 0) return null;
+
+  return {
+    updatedAt: candidate.updatedAt,
+    timezone: candidate.timezone,
+    items: cleanedItems
+  };
+};
+
+const getDayOffset = (date: Date) => {
+  const start = new Date(date.getFullYear(), 0, 1);
+  return Math.floor((date.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+};
+
+const pickDailyWave = (config: DailyWaveConfig, date: Date): DailyWaveEntry => {
+  const dateKey = toDateKey(date);
+  const exact = config.items.find(item => item.date === dateKey);
+  if (exact) return exact;
+
+  const index = getDayOffset(date) % config.items.length;
+  return config.items[index];
+};
+
+const getChinaDateLabel = (date: Date) => {
+  try {
+    const lunar = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
+      month: 'long',
+      day: 'numeric'
+    }).format(date);
+    return `中国农历 ${lunar}`;
+  } catch (_error) {
+    return null;
+  }
+};
+
+const getSolarTermLabel = (date: Date) => {
+  const year = date.getFullYear();
+  if (year < 1901 || year > 2099) return null;
+
+  const yearOffset = year % 100;
+  const month = date.getMonth();
+  const day = date.getDate();
+
+  const firstTerm = SOLAR_TERM_TABLE[month * 2];
+  const secondTerm = SOLAR_TERM_TABLE[month * 2 + 1];
+
+  const firstDay = Math.floor(yearOffset * 0.2422 + (year >= 2000 ? firstTerm.c21 : firstTerm.c20)) - Math.floor((yearOffset - 1) / 4);
+  const secondDay = Math.floor(yearOffset * 0.2422 + (year >= 2000 ? secondTerm.c21 : secondTerm.c20)) - Math.floor((yearOffset - 1) / 4);
+
+  if (day === firstDay) return firstTerm.name;
+  if (day === secondDay) return secondTerm.name;
+  return null;
+};
+
+const getNthWeekday = (year: number, month: number, weekday: number, nth: number) => {
+  const first = new Date(year, month, 1);
+  const firstWeekday = first.getDay();
+  const offset = (weekday - firstWeekday + 7) % 7;
+  return 1 + offset + (nth - 1) * 7;
+};
+
+const getInternationalHolidayLabel = (date: Date) => {
+  const mmdd = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  if (INTERNATIONAL_FIXED_HOLIDAYS[mmdd]) {
+    return INTERNATIONAL_FIXED_HOLIDAYS[mmdd];
+  }
+
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  const weekday = date.getDay();
+
+  // 母亲节：五月第二个周日
+  if (month === 4 && weekday === 0 && day === getNthWeekday(year, 4, 0, 2)) {
+    return '母亲节';
+  }
+
+  // 父亲节：六月第三个周日
+  if (month === 5 && weekday === 0 && day === getNthWeekday(year, 5, 0, 3)) {
+    return '父亲节';
+  }
+
+  // 感恩节：十一月第四个周四
+  if (month === 10 && weekday === 4 && day === getNthWeekday(year, 10, 4, 4)) {
+    return '感恩节';
+  }
+
+  return null;
+};
+
+const getTodayWaveBadges = (date: Date) => {
+  const labels: string[] = [];
+  const chinaDate = getChinaDateLabel(date);
+  const solarTerm = getSolarTermLabel(date);
+  const international = getInternationalHolidayLabel(date);
+
+  if (chinaDate) labels.push(chinaDate);
+  if (solarTerm) labels.push(`节气 ${solarTerm}`);
+  if (international) labels.push(`国际节日 ${international}`);
+
+  return labels;
 };
 
 const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
@@ -724,6 +924,9 @@ const Dashboard: React.FC<{
     announcements: Announcement[]; 
     links: FriendlyLink[];
     siteConfig: SiteConfig;
+  dailyWaveConfigText: string;
+  onUpdateDailyWaveConfigText: (text: string) => void;
+  onApplyDailyWaveConfigText: () => void;
     onUpdatePosts: (posts: Post[]) => void; 
     onUpdateCategories: (cats: string[]) => void; 
     onUpdateAnnouncements: (anns: Announcement[]) => void; 
@@ -731,7 +934,7 @@ const Dashboard: React.FC<{
     onUpdateSiteConfig: (config: SiteConfig) => void;
     onEditPost: (p: Post) => void; 
     onDeletePost: (id: string) => void; 
-}> = ({ posts, categories, announcements, links, siteConfig, onUpdatePosts, onUpdateCategories, onUpdateAnnouncements, onUpdateLinks, onUpdateSiteConfig, onEditPost, onDeletePost }) => {
+}> = ({ posts, categories, announcements, links, siteConfig, dailyWaveConfigText, onUpdateDailyWaveConfigText, onApplyDailyWaveConfigText, onUpdatePosts, onUpdateCategories, onUpdateAnnouncements, onUpdateLinks, onUpdateSiteConfig, onEditPost, onDeletePost }) => {
     const [activeTab, setActiveTab] = useState<'posts' | 'announcements' | 'categories' | 'links' | 'settings'>('posts');
     const [newCategory, setNewCategory] = useState('');
     const [newLink, setNewLink] = useState({ title: '', url: '' });
@@ -740,6 +943,7 @@ const Dashboard: React.FC<{
     // GitHub Sync State
     const [ghConfig, setGhConfig] = useState<GitHubConfig>(() => loadState(KEYS.GITHUB_CONFIG, DEFAULT_GITHUB_CONFIG));
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isSyncingDailyWave, setIsSyncingDailyWave] = useState(false);
     const [syncStatus, setSyncStatus] = useState<{success: boolean, message: string, time: string} | null>(null);
     const [draggingPostId, setDraggingPostId] = useState<string | null>(null);
 
@@ -778,6 +982,46 @@ const Dashboard: React.FC<{
         URL.revokeObjectURL(url);
     };
 
+      const putTextFileToGitHub = async (path: string, content: string, message: string) => {
+        const apiUrl = `https://api.github.com/repos/${ghConfig.username}/${ghConfig.repo}/contents/${path}`;
+
+        const getRes = await fetch(`${apiUrl}?ref=${ghConfig.branch}`, {
+          headers: {
+            'Authorization': `token ${ghConfig.token}`,
+            'Accept': 'application/vnd.github.v3+json'
+          }
+        });
+
+        let sha = '';
+        if (getRes.ok) {
+          const data = await getRes.json();
+          sha = data.sha;
+        } else if (getRes.status !== 404) {
+          throw new Error(`Failed to fetch file: ${getRes.statusText}`);
+        }
+
+        const base64Content = btoa(unescape(encodeURIComponent(content)));
+        const putRes = await fetch(apiUrl, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `token ${ghConfig.token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message,
+            content: base64Content,
+            branch: ghConfig.branch,
+            sha: sha || undefined
+          })
+        });
+
+        if (!putRes.ok) {
+          const errData = await putRes.json();
+          throw new Error(errData.message || 'Update failed');
+        }
+      };
+
     const handleGitHubSync = async (isAuto = false) => {
         if (!ghConfig.username || !ghConfig.repo || !ghConfig.token) {
             setSyncStatus({ success: false, message: '请完善 GitHub 配置', time: new Date().toLocaleTimeString() });
@@ -787,47 +1031,11 @@ const Dashboard: React.FC<{
         setIsSyncing(true);
         try {
             const content = generateTypesFileContent(posts, categories, announcements, links, siteConfig);
-            const apiUrl = `https://api.github.com/repos/${ghConfig.username}/${ghConfig.repo}/contents/${ghConfig.filePath}`;
-            
-            // 1. Get current file SHA (if exists)
-            const getRes = await fetch(`${apiUrl}?ref=${ghConfig.branch}`, {
-                headers: { 
-                    'Authorization': `token ${ghConfig.token}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
-            });
-
-            let sha = '';
-            if (getRes.ok) {
-                const data = await getRes.json();
-                sha = data.sha;
-            } else if (getRes.status !== 404) {
-                 throw new Error(`Failed to fetch file: ${getRes.statusText}`);
-            }
-
-            // 2. PUT Update
-            // Fix UTF-8 encoding for Base64
-            const base64Content = btoa(unescape(encodeURIComponent(content)));
-            
-            const putRes = await fetch(apiUrl, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `token ${ghConfig.token}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: isAuto ? `Auto-sync: Update data` : `Manual sync: Update data via Dashboard`,
-                    content: base64Content,
-                    branch: ghConfig.branch,
-                    sha: sha || undefined
-                })
-            });
-
-            if (!putRes.ok) {
-                const errData = await putRes.json();
-                throw new Error(errData.message || 'Update failed');
-            }
+            await putTextFileToGitHub(
+              ghConfig.filePath,
+              content,
+              isAuto ? 'Auto-sync: Update data' : 'Manual sync: Update data via Dashboard'
+            );
 
             setSyncStatus({ success: true, message: 'GitHub 同步成功', time: new Date().toLocaleTimeString() });
         } catch (error: any) {
@@ -836,6 +1044,28 @@ const Dashboard: React.FC<{
         } finally {
             setIsSyncing(false);
         }
+    };
+
+    const handleSyncDailyWaveConfig = async () => {
+      if (!ghConfig.username || !ghConfig.repo || !ghConfig.token) {
+        setSyncStatus({ success: false, message: '请完善 GitHub 配置', time: new Date().toLocaleTimeString() });
+        return;
+      }
+
+      setIsSyncingDailyWave(true);
+      try {
+        await putTextFileToGitHub(
+          ghConfig.dailyWaveConfigPath,
+          dailyWaveConfigText,
+          'Manual sync: Update daily wave config via Dashboard'
+        );
+        setSyncStatus({ success: true, message: '每日电波配置已推送到 GitHub', time: new Date().toLocaleTimeString() });
+      } catch (error: any) {
+        setSyncStatus({ success: false, message: `推送失败: ${error.message}`, time: new Date().toLocaleTimeString() });
+        alert(`Daily Wave Sync Failed: ${error.message}`);
+      } finally {
+        setIsSyncingDailyWave(false);
+      }
     };
 
     // Helpers for sorting
@@ -1115,6 +1345,16 @@ const Dashboard: React.FC<{
                                      <p className="mt-1 text-[10px] text-gray-400">上传后将生成 GitHub Raw 图片地址，不再把图片存进本地存储。</p>
                                  </div>
 
+                                   <div>
+                                     <label className="block text-xs font-bold text-gray-400 mb-1">每日电波配置路径</label>
+                                     <input 
+                                       value={ghConfig.dailyWaveConfigPath}
+                                       onChange={e => setGhConfig({...ghConfig, dailyWaveConfigPath: e.target.value})}
+                                       className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
+                                       placeholder="public/daily-wave-config.json"
+                                     />
+                                   </div>
+
                                 <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg flex items-center justify-between">
                                      <div className="flex items-center gap-2">
                                          <Clock size={16} className="text-zine-blue dark:text-blue-300"/>
@@ -1145,6 +1385,36 @@ const Dashboard: React.FC<{
                                     <Button onClick={handleExportTs} variant="secondary" className="px-4" title="手动下载备份">
                                         <Download size={18}/>
                                     </Button>
+                                </div>
+                            </div>
+
+                            <div className="bg-gray-50 dark:bg-slate-700/30 p-8 rounded-xl border border-gray-100 dark:border-gray-700 space-y-4 xl:col-span-2">
+                                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-600 pb-2">
+                                  <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white">每日电波配置</h3>
+                                  <span className="text-xs text-gray-400">支持换行与分段，按日期每日推送一篇</span>
+                                </div>
+
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  你可以直接修改 JSON；也可以在浏览器控制台用 <code>window.ewDailyWave</code> 系列方法实时改。
+                                </p>
+
+                                <textarea
+                                  value={dailyWaveConfigText}
+                                  onChange={(e) => onUpdateDailyWaveConfigText(e.target.value)}
+                                  className="w-full min-h-[280px] px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-xs font-mono text-gray-600 dark:text-gray-200"
+                                  spellCheck={false}
+                                />
+
+                                <div className="flex flex-wrap gap-3">
+                                  <Button onClick={onApplyDailyWaveConfigText} icon={<Save size={16} />}>保存到本地并立即生效</Button>
+                                  <Button
+                                    onClick={handleSyncDailyWaveConfig}
+                                    variant="secondary"
+                                    disabled={isSyncingDailyWave}
+                                    icon={isSyncingDailyWave ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>}
+                                  >
+                                    {isSyncingDailyWave ? '推送中...' : '推送配置到 GitHub'}
+                                  </Button>
                                 </div>
                             </div>
                         </div>
@@ -1342,8 +1612,9 @@ const HomeWithNavigation: React.FC<{
   handleDeletePost: (id: string) => void;
   siteConfig: SiteConfig;
   announcements: Announcement[];
-  hitokoto: { text: string; from: string } | null;
-}> = ({ posts, categories, searchQuery, setSearchQuery, editedTimeMap, isAdmin, handleEditPost, handleDeletePost, siteConfig, announcements, hitokoto }) => {
+  dailyWave: DailyWaveEntry | null;
+  todayBadges: string[];
+}> = ({ posts, categories, searchQuery, setSearchQuery, editedTimeMap, isAdmin, handleEditPost, handleDeletePost, siteConfig, announcements, dailyWave, todayBadges }) => {
     const navigate = useNavigate();
     const [sortMode, setSortMode] = useState<'latest' | 'edited'>('latest');
     const [initialFilter, setInitialFilter] = useState('全部');
@@ -1411,11 +1682,25 @@ const HomeWithNavigation: React.FC<{
                 {/* Hitokoto Container: Pushed to bottom on mobile, self-end on desktop */}
                 <div className="max-w-4xl flex-1 relative z-10 w-full">
                     <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zine-blue/5 dark:bg-blue-900/20 text-zine-blue dark:text-blue-300 text-xs font-bold mb-8 border border-zine-blue/10 dark:border-blue-900/30">今日电波</span>
-                    <h2 className="text-xl md:text-3xl font-serif font-black text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue dark:from-white dark:via-blue-300 dark:to-white py-3">
-                        “{hitokoto ? hitokoto.text : '正在接收电波...'}”
-                    </h2>
-                    <p className="text-lg text-gray-500 dark:text-gray-400 font-serif italic">
-                        —— {hitokoto ? hitokoto.from : '...'}
+                    {todayBadges.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {todayBadges.map((badge) => (
+                          <span key={badge} className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wide bg-white/70 dark:bg-slate-800/70 border border-zine-blue/20 dark:border-blue-800/60 text-zine-blue dark:text-blue-200">
+                            {badge}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {dailyWave?.title && (
+                      <h2 className="text-lg md:text-2xl font-serif font-black text-zine-blue dark:text-white mb-2">
+                        {dailyWave.title}
+                      </h2>
+                    )}
+                    <p className="text-xl md:text-3xl font-serif font-black text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue dark:from-white dark:via-blue-300 dark:to-white py-3 whitespace-pre-line leading-relaxed">
+                        {dailyWave ? dailyWave.content : '正在接收今天的电波...'}
+                    </p>
+                    <p className="text-lg text-gray-500 dark:text-gray-400 font-serif italic mt-2">
+                        —— {dailyWave?.from || '电波FM'}
                     </p>
                 </div>
                 
@@ -1559,11 +1844,41 @@ export const App: React.FC = () => {
   
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
-  const [hitokoto, setHitokoto] = useState<{ text: string; from: string } | null>(null);
+  const [dailyWaveConfig, setDailyWaveConfig] = useState<DailyWaveConfig>(() => {
+    const saved = loadState<DailyWaveConfig | null>(KEYS.DAILY_WAVE_CONFIG, null);
+    return parseDailyWaveConfig(saved) || DEFAULT_DAILY_WAVE_CONFIG;
+  });
+  const [dailyWaveConfigText, setDailyWaveConfigText] = useState(() => JSON.stringify(dailyWaveConfig, null, 2));
+  const [todayWave, setTodayWave] = useState<DailyWaveEntry | null>(null);
+  const [todayBadges, setTodayBadges] = useState<string[]>([]);
   const [editedTimeMap, setEditedTimeMap] = useState<Record<string, number>>(() => loadState(KEYS.EDITED_TIME_MAP, {}));
   const [versionChoices, setVersionChoices] = useState<VersionChoice[]>([]);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const hasReconciledRef = useRef(false);
+
+  const applyDailyWaveConfig = (config: DailyWaveConfig, source: 'local' | 'remote' = 'local') => {
+    setDailyWaveConfig(config);
+    setDailyWaveConfigText(JSON.stringify(config, null, 2));
+    localStorage.setItem(KEYS.DAILY_WAVE_CONFIG, JSON.stringify(config));
+    if (source === 'remote') {
+      setSyncNotice('已加载远程每日电波配置。');
+    }
+  };
+
+  const applyDailyWaveConfigFromText = () => {
+    try {
+      const parsed = JSON.parse(dailyWaveConfigText);
+      const validated = parseDailyWaveConfig(parsed);
+      if (!validated) {
+        alert('每日电波配置格式无效：请确保 items 为非空数组，且每项包含 content。');
+        return;
+      }
+      applyDailyWaveConfig(validated, 'local');
+      setSyncNotice('每日电波配置已保存并生效。');
+    } catch (error) {
+      alert(`JSON 解析失败: ${(error as Error).message}`);
+    }
+  };
 
   useEffect(() => {
     const token = document
@@ -1753,40 +2068,80 @@ export const App: React.FC = () => {
   }, [isDark]);
 
   useEffect(() => {
-    const fetchHitokoto = async () => {
+    const loadRemoteDailyWave = async () => {
+      const saved = loadState<DailyWaveConfig | null>(KEYS.DAILY_WAVE_CONFIG, null);
+      const validatedSaved = parseDailyWaveConfig(saved);
+      if (validatedSaved) {
+        setDailyWaveConfig(validatedSaved);
+        setDailyWaveConfigText(JSON.stringify(validatedSaved, null, 2));
+      }
+
       try {
-        const res = await fetch('https://api.suyanw.cn/api/meiju?type=json');
-        const data = await res.json();
-        
-        let text = data.text || data.content || "正在接收电波...";
-        let author = data.from || data.source || data.author;
-
-        // 针对素颜API返回格式进行特殊处理：如果内容中包含 '——'，则手动分割
-        if (text.includes('——')) {
-            const parts = text.split('——');
-            if (parts.length >= 2) {
-                const lastPart = parts[parts.length - 1].trim();
-                // 简单的长度校验，防止误切
-                if (lastPart.length > 0 && lastPart.length < 20) {
-                    author = lastPart;
-                    text = parts.slice(0, -1).join('——').trim();
-                }
-            }
+        const res = await fetch(`${DAILY_WAVE_CONFIG_URL}?t=${Date.now()}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const validated = parseDailyWaveConfig(json);
+        if (validated) {
+          setDailyWaveConfig(validated);
+          setDailyWaveConfigText(JSON.stringify(validated, null, 2));
+          localStorage.setItem(KEYS.DAILY_WAVE_CONFIG, JSON.stringify(validated));
         }
-        
-        // Remove surrounding quotes if present to avoid double quoting
-        text = text.replace(/^['"“](.*)['"”]$/, '$1');
-
-        setHitokoto({ 
-            text: text, 
-            from: author || "电波FM" 
-        });
-      } catch (e) { setHitokoto({ text: "人类的悲欢并不相通。", from: "鲁迅" }); }
+      } catch (_error) {
+        // Keep local config when remote fetch fails.
+      }
     };
-    fetchHitokoto();
-    const interval = setInterval(fetchHitokoto, 15000);
-    return () => clearInterval(interval);
+
+    loadRemoteDailyWave();
   }, []);
+
+  useEffect(() => {
+    const refreshDailyWave = () => {
+      const now = new Date();
+      setTodayWave(pickDailyWave(dailyWaveConfig, now));
+      setTodayBadges(getTodayWaveBadges(now));
+    };
+
+    refreshDailyWave();
+    const interval = setInterval(refreshDailyWave, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [dailyWaveConfig]);
+
+  useEffect(() => {
+    const api = {
+      getConfig: () => dailyWaveConfig,
+      getConfigText: () => dailyWaveConfigText,
+      setConfig: (nextConfig: unknown) => {
+        const validated = parseDailyWaveConfig(nextConfig);
+        if (!validated) throw new Error('Invalid daily wave config.');
+        applyDailyWaveConfig(validated, 'local');
+        return validated;
+      },
+      setConfigText: (text: string) => {
+        const parsed = JSON.parse(text);
+        const validated = parseDailyWaveConfig(parsed);
+        if (!validated) throw new Error('Invalid daily wave config text.');
+        applyDailyWaveConfig(validated, 'local');
+        return validated;
+      },
+      resetToDefault: () => {
+        applyDailyWaveConfig(DEFAULT_DAILY_WAVE_CONFIG, 'local');
+        return DEFAULT_DAILY_WAVE_CONFIG;
+      },
+      clearLocalOverride: () => {
+        localStorage.removeItem(KEYS.DAILY_WAVE_CONFIG);
+      },
+      previewToday: () => pickDailyWave(dailyWaveConfig, new Date())
+    };
+
+    window.ewDailyWave = api;
+    return () => {
+      delete window.ewDailyWave;
+    };
+  }, [dailyWaveConfig, dailyWaveConfigText]);
+
+  useEffect(() => {
+    localStorage.setItem(KEYS.DAILY_WAVE_CONFIG, JSON.stringify(dailyWaveConfig));
+  }, [dailyWaveConfig]);
 
   const handleLogin = async (key: string) => {
     const hash = await digestMessage(key);
@@ -1862,7 +2217,8 @@ export const App: React.FC = () => {
                         handleDeletePost={handleDeletePost}
                         siteConfig={siteConfig}
                         announcements={announcements}
-                        hitokoto={hitokoto}
+                        dailyWave={todayWave}
+                        todayBadges={todayBadges}
                     />
                 } />
                 <Route path="/post/:id" element={<PostDetail posts={posts} isAdmin={isAdmin} onEdit={handleEditPost} />} />
@@ -1874,6 +2230,9 @@ export const App: React.FC = () => {
                             announcements={announcements} 
                             links={links} 
                             siteConfig={siteConfig}
+                            dailyWaveConfigText={dailyWaveConfigText}
+                            onUpdateDailyWaveConfigText={setDailyWaveConfigText}
+                            onApplyDailyWaveConfigText={applyDailyWaveConfigFromText}
                             onUpdatePosts={setPosts} 
                             onUpdateCategories={setCategories} 
                             onUpdateAnnouncements={setAnnouncements} 
