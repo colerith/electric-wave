@@ -304,19 +304,22 @@ const getTodayWaveBadges = (date: Date) => {
 const getWaveBadgeStyle = (badge: string) => {
   if (badge.startsWith('中国农历')) {
     return {
-      wrapper: 'border-amber-300/70 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-900 shadow-[0_6px_20px_-14px_rgba(217,119,6,0.75)] dark:border-amber-700/60 dark:bg-gradient-to-r dark:from-amber-950/50 dark:to-orange-950/40 dark:text-amber-200',
-      dot: 'bg-amber-500'
+      wrapper: 'border-zine-blue/25 bg-white/75 text-zine-blue dark:border-blue-700/60 dark:bg-slate-900/70 dark:text-blue-200',
+      dot: 'bg-zine-blue',
+      tag: '中历'
     };
   }
   if (badge.startsWith('节气')) {
     return {
-      wrapper: 'border-emerald-300/70 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-900 shadow-[0_6px_20px_-14px_rgba(5,150,105,0.75)] dark:border-emerald-700/60 dark:bg-gradient-to-r dark:from-emerald-950/45 dark:to-teal-950/35 dark:text-emerald-200',
-      dot: 'bg-emerald-500'
+      wrapper: 'border-zine-blue/25 bg-zine-blue/5 text-zine-blue dark:border-blue-700/60 dark:bg-blue-900/20 dark:text-blue-200',
+      dot: 'bg-blue-500',
+      tag: '节气'
     };
   }
   return {
-    wrapper: 'border-fuchsia-300/70 bg-gradient-to-r from-fuchsia-50 to-rose-50 text-fuchsia-900 shadow-[0_6px_20px_-14px_rgba(190,24,93,0.75)] dark:border-fuchsia-700/60 dark:bg-gradient-to-r dark:from-fuchsia-950/40 dark:to-rose-950/30 dark:text-fuchsia-200',
-    dot: 'bg-fuchsia-500'
+    wrapper: 'border-zine-pink/35 bg-zine-pink/10 text-zine-blue dark:border-pink-700/60 dark:bg-pink-900/20 dark:text-pink-200',
+    dot: 'bg-zine-pink',
+    tag: '国际'
   };
 };
 
@@ -1818,23 +1821,29 @@ const HomeWithNavigation: React.FC<{
             <section className="mb-24 flex flex-col justify-between md:flex-row md:items-end md:justify-between border-b border-zine-blue/10 dark:border-gray-700 pb-16 md:relative min-h-[400px]">
                 
                 {/* ECG Visualizer: In-flow on mobile with smaller height, absolute on desktop */}
-                <div className="w-full h-[140px] -z-10 overflow-hidden pointer-events-none opacity-45 md:absolute md:top-4 md:left-1/2 md:-translate-x-1/2 md:w-screen md:h-[180px] md:opacity-40">
+                <div className="w-full h-[120px] -z-10 overflow-hidden pointer-events-none opacity-40 md:absolute md:-top-20 md:left-1/2 md:-translate-x-1/2 md:w-screen md:h-[150px] md:opacity-35">
                     <ECGVisualizer />
                 </div>
 
                 {/* Hitokoto Container: Pushed to bottom on mobile, self-end on desktop */}
-                <div className="max-w-4xl flex-1 relative z-10 w-full pt-12 md:pt-24">
+                <div className="max-w-4xl flex-1 relative z-10 w-full pt-14 md:pt-28">
                     <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zine-blue/5 dark:bg-blue-900/20 text-zine-blue dark:text-blue-300 text-xs font-bold mb-8 border border-zine-blue/10 dark:border-blue-900/30">今日电波</span>
                     {todayBadges.length > 0 && (
                       <div className="flex flex-wrap gap-2.5 mb-5">
                         {todayBadges.map((badge) => (
+                          (() => {
+                            const badgeStyle = getWaveBadgeStyle(badge);
+                            return (
                           <span
                             key={badge}
-                            className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-[11px] font-bold tracking-[0.08em] border transition-all duration-300 hover:-translate-y-0.5 ${getWaveBadgeStyle(badge).wrapper}`}
+                            className={`group inline-flex items-center gap-2 px-2.5 py-1.5 rounded-full text-[11px] font-bold border shadow-sm transition-all duration-300 hover:-translate-y-0.5 ${badgeStyle.wrapper}`}
                           >
-                            <i className={`w-1.5 h-1.5 rounded-full animate-pulse ${getWaveBadgeStyle(badge).dot}`} />
-                            {badge}
+                            <span className={`w-1.5 h-1.5 rounded-full ${badgeStyle.dot}`} />
+                            <span className="px-1.5 py-0.5 rounded-full bg-white/80 dark:bg-slate-800/80 text-[10px] tracking-wide">{badgeStyle.tag}</span>
+                            <span className="tracking-wide">{badge}</span>
                           </span>
+                            );
+                          })()
                         ))}
                       </div>
                     )}
