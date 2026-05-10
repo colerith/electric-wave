@@ -1840,19 +1840,13 @@ const HomeWithNavigation: React.FC<{
 
                 {/* Hitokoto Container: Pushed to bottom on mobile, self-end on desktop */}
                 <div className="max-w-4xl flex-1 relative z-10 w-full pt-14 md:pt-28">
-                    <div className="mb-8 relative w-fit max-w-full min-w-[320px] px-5 py-3 rounded-sm overflow-hidden bg-white/70 dark:bg-slate-900/35 border border-zine-blue/10 dark:border-blue-300/15 border-b-zine-pink/40 shadow-[0_10px_24px_-22px_rgba(27,60,115,0.65)]">
-                      <span className="absolute inset-x-0 top-0 text-[56px] md:text-[64px] leading-none font-serif italic tracking-[0.02em] text-zine-pink/10 dark:text-zine-pink/15 select-none pointer-events-none -translate-y-1 px-4">
-                        today
-                      </span>
-                      <div className="relative inline-flex items-center gap-2">
-                        <h2 className="text-zine-blue/90 dark:text-blue-100/90 text-[24px] md:text-[30px] uppercase tracking-[0.2em] font-serif font-bold leading-none">
-                          Today Wave
-                        </h2>
-                        <span className="w-2.5 h-2.5 rounded-full bg-zine-pink/90 shadow-[0_0_0_3px_rgba(244,114,182,0.18)]" />
-                      </div>
-                      <p className="relative mt-1 text-[12px] uppercase tracking-[0.24em] text-zine-pink/75 dark:text-zine-pink/70">
-                        今日电波
+                    <div className="mb-8 inline-flex flex-col">
+                      <p className="text-zine-blue/75 dark:text-blue-200/70 text-[16px] md:text-[18px] uppercase tracking-[0.18em] font-serif font-semibold leading-none">
+                        Today Wave
                       </p>
+                      <h2 className="mt-1 text-zine-blue dark:text-blue-100 text-[34px] md:text-[42px] font-serif font-black tracking-[0.06em] leading-none">
+                        今日电波
+                      </h2>
                     </div>
                     {todayBadges.length > 0 && (
                       <div className="flex flex-wrap gap-2.5 mb-5">
