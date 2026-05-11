@@ -24,11 +24,53 @@ const KEYS = {
   CONFIG: 'ew_site_config',
   DAILY_WAVE_CONFIG: 'ew_daily_wave_config',
   ADMIN: 'ew_admin_logged_in',
-  THEME: 'ew_theme_mode',
+  THEME_MODE: 'ew_theme_mode',
+  THEME_MANUAL_DARK: 'ew_theme_manual_dark',
   GITHUB_CONFIG: 'ew_github_config',
   DATA_HISTORY: 'ew_data_history',
   LAST_SEEN_PUBLISHED_HASH: 'ew_last_seen_published_hash',
   EDITED_TIME_MAP: 'ew_post_edited_time_map'
+};
+
+type ThemeMode = 'auto' | 'manual';
+
+const getAutoThemeByTime = (date = new Date()) => {
+  const hour = date.getHours();
+  return hour >= 18 || hour < 6;
+};
+
+const readThemeMode = (): ThemeMode => {
+  const savedMode = localStorage.getItem(KEYS.THEME_MODE);
+  if (savedMode === 'auto' || savedMode === 'manual') {
+    return savedMode;
+  }
+
+  // Backward compatibility: old versions stored a boolean at ew_theme_mode.
+  if (savedMode !== null) {
+    try {
+      const legacyManual = JSON.parse(savedMode);
+      if (typeof legacyManual === 'boolean') {
+        localStorage.setItem(KEYS.THEME_MODE, 'manual');
+        localStorage.setItem(KEYS.THEME_MANUAL_DARK, JSON.stringify(legacyManual));
+        return 'manual';
+      }
+    } catch (_error) {
+      // Ignore malformed legacy values and fallback to auto mode.
+    }
+  }
+
+  return 'auto';
+};
+
+const readManualTheme = () => {
+  const savedManual = localStorage.getItem(KEYS.THEME_MANUAL_DARK);
+  if (savedManual === null) return null;
+  try {
+    const parsed = JSON.parse(savedManual);
+    return typeof parsed === 'boolean' ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
 };
 
 interface DataBundle {
@@ -825,7 +867,7 @@ const FilterDropdown: React.FC<{
   );
 };
 
-const Header: React.FC<{ isAdmin: boolean; isDark: boolean; toggleTheme: () => void; onLoginClick: () => void; onLogout: () => void; onNewPost: () => void; searchQuery: string; setSearchQuery: (q: string) => void; siteConfig: SiteConfig; }> = ({ isAdmin, isDark, toggleTheme, onLoginClick, onLogout, onNewPost, searchQuery, setSearchQuery, siteConfig }) => {
+const Header: React.FC<{ isAdmin: boolean; isDark: boolean; themeMode: ThemeMode; onEnableAutoTheme: () => void; toggleTheme: () => void; onLoginClick: () => void; onLogout: () => void; onNewPost: () => void; searchQuery: string; setSearchQuery: (q: string) => void; siteConfig: SiteConfig; }> = ({ isAdmin, isDark, themeMode, onEnableAutoTheme, toggleTheme, onLoginClick, onLogout, onNewPost, searchQuery, setSearchQuery, siteConfig }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 h-20 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between gap-4 sm:gap-8">
@@ -838,8 +880,22 @@ const Header: React.FC<{ isAdmin: boolean; isDark: boolean; toggleTheme: () => v
           <Search className="absolute left-0 top-1.5 text-gray-400" size={16} />
         </div>
         <div className="flex items-center gap-3 sm:gap-6 shrink-0">
+          <button
+            onClick={onEnableAutoTheme}
+            title="自动昼夜切换"
+            aria-label="自动昼夜切换"
+            className={`transition-colors p-1 ${themeMode === 'auto' ? 'text-zine-blue dark:text-zine-pink' : 'text-gray-400 hover:text-zine-blue dark:hover:text-zine-pink'}`}
+          >
+            <Clock size={20} />
+          </button>
+
           {/* Theme Toggle */}
-          <button onClick={toggleTheme} className="text-gray-400 hover:text-zine-blue dark:hover:text-yellow-300 transition-colors p-1">
+          <button
+            onClick={toggleTheme}
+            title="手动昼夜切换"
+            aria-label="手动昼夜切换"
+            className={`transition-colors p-1 ${themeMode === 'manual' ? (isDark ? 'text-yellow-300' : 'text-zine-blue') : 'text-gray-400 hover:text-zine-blue dark:hover:text-yellow-300'}`}
+          >
             {isDark ? <Sun size={20} /> : <Moon size={20} />}
           </button>
           
@@ -2009,16 +2065,16 @@ export const App: React.FC = () => {
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => loadState(KEYS.CONFIG, DEFAULT_SITE_CONFIG));
   
   const [isAdmin, setIsAdmin] = useState(() => loadState(KEYS.ADMIN, false));
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => readThemeMode());
   
-  // Custom theme initialization to support timed fallback without locking preference
+  // 默认自动模式：按时间切换；手动模式：使用用户选择
   const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem(KEYS.THEME);
-    if (saved !== null) {
-      try { return JSON.parse(saved); } catch (e) { return false; }
+    const initialMode = readThemeMode();
+    if (initialMode === 'manual') {
+      const manualTheme = readManualTheme();
+      if (manualTheme !== null) return manualTheme;
     }
-    // Default: Time based (18:00 - 06:00)
-    const hour = new Date().getHours();
-    return hour >= 18 || hour < 6;
+    return getAutoThemeByTime();
   });
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -2224,24 +2280,32 @@ export const App: React.FC = () => {
   const toggleTheme = () => {
     const newMode = !isDark;
     setIsDark(newMode);
-    localStorage.setItem(KEYS.THEME, JSON.stringify(newMode));
+    setThemeMode('manual');
+    localStorage.setItem(KEYS.THEME_MODE, 'manual');
+    localStorage.setItem(KEYS.THEME_MANUAL_DARK, JSON.stringify(newMode));
   };
 
-  // Timed Check Effect (18:00 - 06:00)
-  // Only runs if user hasn't manually set a preference
+  const enableAutoTheme = () => {
+    setThemeMode('auto');
+    localStorage.setItem(KEYS.THEME_MODE, 'auto');
+    setIsDark(getAutoThemeByTime());
+  };
+
+  // Timed check only in auto mode.
   useEffect(() => {
+    if (themeMode !== 'auto') return;
+
     const checkTime = () => {
-      if (localStorage.getItem(KEYS.THEME) !== null) return;
-      
-      const hour = new Date().getHours();
-      const shouldBeDark = hour >= 18 || hour < 6;
+      const shouldBeDark = getAutoThemeByTime();
       setIsDark((prev: boolean) => (prev !== shouldBeDark ? shouldBeDark : prev));
     };
+
+    checkTime();
 
     // Check every minute
     const interval = setInterval(checkTime, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [themeMode]);
 
   useEffect(() => {
     if (isDark) document.documentElement.classList.add('dark');
@@ -2376,6 +2440,8 @@ export const App: React.FC = () => {
              <Header 
                 isAdmin={isAdmin} 
                 isDark={isDark} 
+               themeMode={themeMode}
+               onEnableAutoTheme={enableAutoTheme}
                 toggleTheme={toggleTheme} 
                 onLoginClick={() => setIsLoginOpen(true)}
                 onLogout={() => setIsAdmin(false)}
