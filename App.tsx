@@ -857,7 +857,7 @@ const FilterDropdown: React.FC<{
           if (!open) updateMenuPosition();
           setOpen(prev => !prev);
         }}
-        className="min-w-[128px] sm:min-w-[180px] px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm text-left bg-white/90 dark:bg-slate-800/90 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 shadow-sm hover:border-zine-blue/40 dark:hover:border-zine-pink/50 transition-all duration-300 flex items-center justify-between"
+        className="w-full min-w-0 sm:min-w-[180px] px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm text-left bg-white/90 dark:bg-slate-800/90 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 shadow-sm hover:border-zine-blue/40 dark:hover:border-zine-pink/50 transition-all duration-300 flex items-center justify-between"
       >
         <span className="truncate">{current}</span>
         <ChevronDown size={16} className={`ml-3 shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
@@ -1832,6 +1832,7 @@ const HomeWithNavigation: React.FC<{
     const [sortMode, setSortMode] = useState<'latest' | 'edited'>('latest');
     const [initialFilter, setInitialFilter] = useState('全部');
     const [tagFilter, setTagFilter] = useState('全部');
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const POSTS_PER_PAGE = 20;
 
@@ -1953,48 +1954,68 @@ const HomeWithNavigation: React.FC<{
             <AnnouncementGallery announcements={announcements} />
 
             {/* Sticky Category Filter */}
-             <div className="isolate overflow-visible flex flex-wrap gap-2 mb-12 sticky top-20 z-[70] bg-white/80 dark:bg-slate-900/80 backdrop-blur-md py-3 md:py-4 -mx-6 px-4 sm:px-6 md:mx-0 md:px-0 md:bg-transparent md:static transition-colors">
-                 <button 
-                    onClick={() => setSearchQuery('')}
-                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all ${!searchQuery ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
-                 >
-                    全部
-                 </button>
-                 {categories.map(cat => (
-                     <button 
-                        key={cat}
-                        onClick={() => setSearchQuery(cat)}
-                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all ${searchQuery === cat ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
-                     >
-                        {cat}
-                     </button>
-                 ))}
+             <div className="isolate overflow-visible mb-12 sticky top-20 z-[70] bg-white/80 dark:bg-slate-900/80 backdrop-blur-md py-3 md:py-4 -mx-6 px-4 sm:px-6 md:mx-0 md:px-0 md:bg-transparent md:static transition-colors">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileFiltersOpen(prev => !prev)}
+                  className="md:hidden w-full px-4 py-2 rounded-full text-xs font-bold tracking-wide bg-white dark:bg-slate-800 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-between"
+                >
+                  <span>筛选面板</span>
+                    {isMobileFiltersOpen ? <ArrowUp size={16} /> : <ChevronDown size={16} />}
+                </button>
 
-                 <div className="w-full h-px bg-gray-100 dark:bg-slate-800 my-2"></div>
-
-                 <FilterDropdown
+                <div className={`${isMobileFiltersOpen ? 'flex' : 'hidden'} md:flex flex-wrap gap-2 mt-3 md:mt-0`}>
+                 <div className="w-full flex items-center gap-2">
+                   <FilterDropdown
+                    className="flex-1 min-w-0"
                     value={initialFilter}
                     onChange={setInitialFilter}
                     options={initialOptions.map(i => ({ value: i, label: `首字母：${i}` }))}
-                 />
+                   />
 
-                 <FilterDropdown
+                   <FilterDropdown
+                    className="flex-1 min-w-0"
                     value={sortMode}
                     onChange={(v) => setSortMode(v as 'latest' | 'edited')}
                     options={[
                       { value: 'latest', label: '排序：最新发布' },
                       { value: 'edited', label: '排序：最近编辑' }
                     ]}
-                 />
+                   />
 
-                 <FilterDropdown
+                   <FilterDropdown
+                    className="flex-1 min-w-0"
                     value={tagFilter}
                     onChange={setTagFilter}
                     options={[
                       { value: '全部', label: '标签：全部' },
                       ...allTagOptions.map(tag => ({ value: tag, label: `标签：${tag}` }))
                     ]}
-                 />
+                   />
+                 </div>
+
+                 <div className="w-full h-px bg-gray-100 dark:bg-slate-800 my-2"></div>
+
+                 <div className="w-full overflow-x-auto pb-1">
+                  <div className="inline-flex items-center gap-2 min-w-full pr-1">
+                    <button 
+                      onClick={() => setSearchQuery('')}
+                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${!searchQuery ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
+                    >
+                      全部
+                    </button>
+                    {categories.map(cat => (
+                      <button 
+                        key={cat}
+                        onClick={() => setSearchQuery(cat)}
+                        className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${searchQuery === cat ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                 </div>
+                </div>
             </div>
 
             {/* Pinned Posts Section */}
