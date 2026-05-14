@@ -163,6 +163,7 @@ interface DailyWaveConfig {
 }
 
 const DAILY_WAVE_CONFIG_URL = '/daily-wave-config.json';
+const BUSUANZI_SCRIPT_BASE = 'https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js';
 
 const DEFAULT_DAILY_WAVE_CONFIG: DailyWaveConfig = {
   updatedAt: '2026-05-10T00:00:00+08:00',
@@ -856,7 +857,7 @@ const FilterDropdown: React.FC<{
           if (!open) updateMenuPosition();
           setOpen(prev => !prev);
         }}
-        className="min-w-[180px] px-4 py-2 rounded-full text-sm text-left bg-white/90 dark:bg-slate-800/90 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 shadow-sm hover:border-zine-blue/40 dark:hover:border-zine-pink/50 transition-all duration-300 flex items-center justify-between"
+        className="min-w-[128px] sm:min-w-[180px] px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm text-left bg-white/90 dark:bg-slate-800/90 border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 shadow-sm hover:border-zine-blue/40 dark:hover:border-zine-pink/50 transition-all duration-300 flex items-center justify-between"
       >
         <span className="truncate">{current}</span>
         <ChevronDown size={16} className={`ml-3 shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
@@ -906,6 +907,7 @@ const Header: React.FC<{ isAdmin: boolean; isDark: boolean; themeMode: ThemeMode
           {isAdmin ? (
             <div className="flex items-center gap-4">
               <Link to="/dashboard" className="w-9 h-9 rounded-full overflow-hidden border-2 border-zine-pink hidden sm:block"><img src={siteConfig.avatarUrl} className="w-full h-full object-cover" alt="admin" /></Link>
+              <Link to="/dashboard" className="sm:hidden text-zine-blue dark:text-white p-1" aria-label="打开管理面板"><LayoutDashboard size={20} /></Link>
               <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors p-1"><LogOut size={18} /></button>
               <Button onClick={onNewPost} variant="primary" icon={<Plus size={16} />} className="!py-1.5 !px-4 !text-xs !rounded-full hidden sm:flex">发布</Button>
               <button onClick={onNewPost} className="sm:hidden text-zine-blue dark:text-white p-1"><PlusCircle size={24}/></button>
@@ -1951,10 +1953,10 @@ const HomeWithNavigation: React.FC<{
             <AnnouncementGallery announcements={announcements} />
 
             {/* Sticky Category Filter */}
-             <div className="relative isolate overflow-visible flex flex-wrap gap-2 mb-12 sticky top-20 z-[70] bg-white/80 dark:bg-slate-900/80 backdrop-blur-md py-4 -mx-6 px-6 md:mx-0 md:px-0 md:bg-transparent md:static transition-colors">
+             <div className="isolate overflow-visible flex flex-wrap gap-2 mb-12 sticky top-20 z-[70] bg-white/80 dark:bg-slate-900/80 backdrop-blur-md py-3 md:py-4 -mx-6 px-4 sm:px-6 md:mx-0 md:px-0 md:bg-transparent md:static transition-colors">
                  <button 
                     onClick={() => setSearchQuery('')}
-                    className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${!searchQuery ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all ${!searchQuery ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
                  >
                     全部
                  </button>
@@ -1962,7 +1964,7 @@ const HomeWithNavigation: React.FC<{
                      <button 
                         key={cat}
                         onClick={() => setSearchQuery(cat)}
-                        className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${searchQuery === cat ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
+                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all ${searchQuery === cat ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
                      >
                         {cat}
                      </button>
@@ -2131,6 +2133,45 @@ export const App: React.FC = () => {
     script.src = 'https://static.cloudflareinsights.com/beacon.min.js';
     script.setAttribute('data-cf-beacon', JSON.stringify({ token }));
     document.head.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    const resetBusuanziValue = (id: string) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.textContent = '--';
+      }
+    };
+
+    const refreshBusuanzi = () => {
+      resetBusuanziValue('busuanzi_value_site_uv');
+      resetBusuanziValue('busuanzi_value_site_pv');
+
+      document.querySelectorAll('script[src*="busuanzi.pure.mini.js"]').forEach((old) => {
+        old.parentNode?.removeChild(old);
+      });
+
+      const script = document.createElement('script');
+      script.async = true;
+      script.src = `${BUSUANZI_SCRIPT_BASE}?t=${Date.now()}`;
+      script.setAttribute('data-busuanzi-refresh', 'true');
+      document.body.appendChild(script);
+    };
+
+    refreshBusuanzi();
+
+    const interval = window.setInterval(refreshBusuanzi, 90 * 1000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshBusuanzi();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   const uploadImageToGitHub = async (file: File) => {
@@ -2452,22 +2493,22 @@ export const App: React.FC = () => {
              />
              
              <Routes>
-                <Route path="/" element={
-                    <HomeWithNavigation 
-                        posts={filteredPosts} 
-                        categories={categories} 
-                        searchQuery={searchQuery}
-                        setSearchQuery={setSearchQuery}
-                        editedTimeMap={editedTimeMap}
-                        isAdmin={isAdmin}
-                        handleEditPost={handleEditPost}
-                        handleDeletePost={handleDeletePost}
-                        siteConfig={siteConfig}
-                        announcements={announcements}
-                        dailyWave={todayWave}
-                        todayBadges={todayBadges}
-                    />
-                } />
+              <Route path="/" element={
+                <HomeWithNavigation 
+                  posts={filteredPosts} 
+                  categories={categories} 
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  editedTimeMap={editedTimeMap}
+                  isAdmin={isAdmin}
+                  handleEditPost={handleEditPost}
+                  handleDeletePost={handleDeletePost}
+                  siteConfig={siteConfig}
+                  announcements={announcements}
+                  dailyWave={todayWave}
+                  todayBadges={todayBadges}
+                />
+              } />
                 <Route path="/post/:id" element={<PostDetail posts={posts} isAdmin={isAdmin} onEdit={handleEditPost} />} />
                 <Route path="/dashboard" element={
                     isAdmin ? (
