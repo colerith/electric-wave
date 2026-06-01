@@ -31,8 +31,8 @@ export interface SiteConfig {
 }
 
 export const DATA_VERSION = {
-  hash: 'he9e07b99',
-  generatedAt: '2026-06-01T03:42:35.323Z'
+  hash: 'he1298d7f',
+  generatedAt: '2026-06-01T03:43:36.323Z'
 } as const;
 
 export type ViewMode = 'gallery' | 'list';
@@ -276,7 +276,7 @@ export const INITIAL_LINKS: FriendlyLink[] = [
 export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   {
     "id": "cde193dd-8bd2-414f-8390-a352b545ec67",
-    "content": "月读 v1.2 已上线~\n请务必认真阅读更新日志！！",
+    "content": "🎉月读重制版——日月西来啦！超多愿望一次满足😋\n请务必认真阅读更新日志！！",
     "isActive": true
   },
   {
