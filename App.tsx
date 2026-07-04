@@ -430,11 +430,12 @@ const generateTypesFileContent = (
     categories: string[], 
     announcements: Announcement[], 
     links: FriendlyLink[], 
-    siteConfig: SiteConfig
+    siteConfig: SiteConfig,
+    previousGeneratedAt?: string
 ) => {
     const bundleForHash = { posts, categories, announcements, links, siteConfig };
     const versionHash = hashString(JSON.stringify(bundleForHash));
-    const generatedAt = new Date().toISOString();
+    const generatedAt = previousGeneratedAt || new Date().toISOString();
 
     return `
 export interface Post {
@@ -491,6 +492,19 @@ export const INITIAL_LINKS: FriendlyLink[] = ${JSON.stringify(links, null, 2)};
 
 export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announcements, null, 2)};
 `;
+};
+
+const DATA_VERSION_HASH_RE = /hash:\s*'([^']+)'/;
+const DATA_VERSION_GENERATED_AT_RE = /generatedAt:\s*'([^']+)'/;
+
+const extractDataVersionMetadata = (content: string) => {
+  const hashMatch = content.match(DATA_VERSION_HASH_RE);
+  const generatedAtMatch = content.match(DATA_VERSION_GENERATED_AT_RE);
+
+  return {
+    hash: hashMatch?.[1] || null,
+    generatedAt: generatedAtMatch?.[1] || null,
+  };
 };
 
 // Helper to preserve multiple blank lines while respecting code blocks
@@ -1086,7 +1100,7 @@ const Dashboard: React.FC<{
         URL.revokeObjectURL(url);
     };
 
-      const putTextFileToGitHub = async (path: string, content: string, message: string) => {
+      const getGitHubTextFile = async (path: string) => {
         const apiUrl = `https://api.github.com/repos/${ghConfig.username}/${ghConfig.repo}/contents/${path}`;
 
         const getRes = await fetch(`${apiUrl}?ref=${ghConfig.branch}`, {
@@ -1097,11 +1111,26 @@ const Dashboard: React.FC<{
         });
 
         let sha = '';
+        let existingContent = '';
         if (getRes.ok) {
           const data = await getRes.json();
           sha = data.sha;
+          if (data.content) {
+            existingContent = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+          }
         } else if (getRes.status !== 404) {
           throw new Error(`Failed to fetch file: ${getRes.statusText}`);
+        }
+
+        return { sha, content: existingContent };
+      };
+
+      const putTextFileToGitHub = async (path: string, content: string, message: string) => {
+        const apiUrl = `https://api.github.com/repos/${ghConfig.username}/${ghConfig.repo}/contents/${path}`;
+        const { sha, content: existingContent } = await getGitHubTextFile(path);
+
+        if (existingContent === content) {
+          return { skipped: true as const };
         }
 
         const base64Content = btoa(unescape(encodeURIComponent(content)));
@@ -1124,6 +1153,8 @@ const Dashboard: React.FC<{
           const errData = await putRes.json();
           throw new Error(errData.message || 'Update failed');
         }
+
+        return { skipped: false as const };
       };
 
     const handleGitHubSync = async (isAuto = false) => {
@@ -1134,14 +1165,32 @@ const Dashboard: React.FC<{
 
         setIsSyncing(true);
         try {
-            const content = generateTypesFileContent(posts, categories, announcements, links, siteConfig);
-            await putTextFileToGitHub(
+            const existingFile = await getGitHubTextFile(ghConfig.filePath);
+            const nextMetadata = extractDataVersionMetadata(
+              generateTypesFileContent(posts, categories, announcements, links, siteConfig)
+            );
+            const currentMetadata = extractDataVersionMetadata(existingFile.content);
+
+            const content = generateTypesFileContent(
+              posts,
+              categories,
+              announcements,
+              links,
+              siteConfig,
+              currentMetadata.hash === nextMetadata.hash ? currentMetadata.generatedAt || undefined : undefined
+            );
+
+            const result = await putTextFileToGitHub(
               ghConfig.filePath,
               content,
               isAuto ? 'Auto-sync: Update data' : 'Manual sync: Update data via Dashboard'
             );
 
-            setSyncStatus({ success: true, message: 'GitHub 同步成功', time: new Date().toLocaleTimeString() });
+            setSyncStatus({
+              success: true,
+              message: result.skipped ? '内容无变化，已跳过 GitHub 同步' : 'GitHub 同步成功',
+              time: new Date().toLocaleTimeString()
+            });
         } catch (error: any) {
             setSyncStatus({ success: false, message: `同步失败: ${error.message}`, time: new Date().toLocaleTimeString() });
             if (!isAuto) alert(`GitHub Sync Failed: ${error.message}`);
