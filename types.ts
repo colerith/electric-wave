@@ -32,7 +32,7 @@ export interface SiteConfig {
 
 export const DATA_VERSION = {
   hash: 'he246ae52',
-  generatedAt: '2026-07-04T13:12:14.522Z'
+  generatedAt: '2026-07-04T13:42:14.456Z'
 } as const;
 
 export type ViewMode = 'gallery' | 'list';
