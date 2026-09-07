@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+import { cloudflare } from "@cloudflare/vite-plugin";
+
 function getGitHubPagesBasePath() {
   const explicitBasePath = process.env.VITE_BASE_PATH;
   if (explicitBasePath) {
@@ -25,7 +27,7 @@ function getGitHubPagesBasePath() {
 }
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), cloudflare()],
   // GitHub Pages repo sites need a repo-prefixed base path, while local and custom-domain deploys stay at root.
   base: getGitHubPagesBasePath(),
   define: {
