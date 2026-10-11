@@ -34,6 +34,14 @@ try {
   assert.equal(await visitor.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
 
   await page.goto(origin + '/#/dashboard');
+  const beforeOrder = (await (await fetch(origin + '/api/content')).json()).content.posts.filter(p => p.isPinned);
+  const rows = page.locator('tr[draggable]');
+  const reordered = page.waitForResponse(r => r.url().endsWith('/api/content') && r.request().method() === 'PUT' && r.status() === 200);
+  await rows.filter({ hasText: beforeOrder[1].title }).dragTo(rows.filter({ hasText: beforeOrder[0].title }));
+  await reordered;
+  await visitor.reload();
+  const featured = visitor.locator('section').filter({ has: visitor.getByRole('heading', { name: '精选推荐' }) });
+  assert.equal(await featured.locator('h4').first().textContent(), beforeOrder[1].title);
   await page.getByRole('button', { name: '设置', exact: true }).click();
   const nameInput = page.locator('input').nth(1);
   const originalName = await nameInput.inputValue();

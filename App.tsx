@@ -1055,21 +1055,21 @@ const Dashboard: React.FC<{
                         </div>
 
                         <div className="xl:col-span-2 bg-gray-50 dark:bg-slate-700/30 rounded-xl border border-gray-100 dark:border-gray-700 p-6 space-y-5">
-                          <div className="flex flex-wrap items-center gap-3 justify-between border-b border-gray-200 dark:border-gray-600 pb-3">
+                          <div className="flex flex-col gap-4 border-b border-gray-200 dark:border-gray-600 pb-4">
                             <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white">每日电波编辑器</h3>
-                            <select aria-label="每日电波来源" value={dailyWaveConfig.source || 'manual'} onChange={e => updateDailyWave(prev => ({ ...prev, source: e.target.value as 'manual' | 'one' }))} className="rounded-lg border p-2 bg-white dark:bg-slate-800 dark:text-white">
-                              <option value="manual">手动电波</option><option value="one">ONE 自动电波（当天手动内容优先）</option>
+                            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                            <select aria-label="每日电波来源" value={dailyWaveConfig.source || 'manual'} onChange={e => updateDailyWave(prev => ({ ...prev, source: e.target.value as 'manual' | 'one' }))} className="w-full sm:w-auto min-w-0 rounded-lg border border-gray-200 dark:border-gray-600 px-4 py-2.5 bg-white dark:bg-slate-800 text-sm text-zine-blue dark:text-white outline-none focus:ring-2 focus:ring-zine-pink/30">
+                              <option value="manual">手动电波</option><option value="one">ONE 自动电波</option>
                             </select>
-                            {dailyWaveConfig.source === 'one' && <button disabled={oneLoading} onClick={async () => {
+                            {dailyWaveConfig.source === 'one' && <button className="shrink-0 rounded-lg bg-zine-blue px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-wait" disabled={oneLoading} onClick={async () => {
                               setOneLoading(true); setOneNotice('');
                               try { const result = await api('/daily-wave/refresh', { method: 'POST' }); setOneNotice(result.error || '已获取最新电波'); window.dispatchEvent(new Event('ew-one-refresh')); }
                               catch (error) { setOneNotice((error as Error).message); }
                               finally { setOneLoading(false); }
                             }}>{oneLoading ? '获取中…' : '立即获取'}</button>}
-                            {oneNotice && <span className="text-sm text-gray-500">{oneNotice}</span>}
-                            <div className="flex items-center gap-2">
-
                             </div>
+                            {dailyWaveConfig.source === 'one' && <p className="text-xs text-gray-500 dark:text-gray-400">每天自动更新，当天的手动内容优先展示。</p>}
+                            {oneNotice && <span role="status" className="text-sm text-gray-500 dark:text-gray-400">{oneNotice}</span>}
                           </div>
 
                           {selectedWave ? (
@@ -1124,7 +1124,7 @@ const Dashboard: React.FC<{
 
                     {/* Global Settings */}
                     {activeTab === 'settings' && (
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 animate-in fade-in duration-300">
+                        <div className="w-full animate-in fade-in duration-300">
                             {/* Basic Info */}
                             <div className="bg-gray-50 dark:bg-slate-700/30 p-8 rounded-xl border border-gray-100 dark:border-gray-700 space-y-8">
                                 <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white border-b border-gray-200 dark:border-gray-600 pb-2">基础信息</h3>
@@ -1409,7 +1409,7 @@ const HomeWithNavigation: React.FC<{
         return result;
     }, [posts, sortMode, initialFilter, tagFilter, editedTimeMap]);
 
-    const pinnedPosts = filteredAndSortedPosts.filter(p => p.isPinned);
+    const pinnedPosts = posts.filter(p => p.isPinned && filteredAndSortedPosts.some(visible => visible.id === p.id));
     const regularPosts = filteredAndSortedPosts.filter(p => !p.isPinned);
     const totalPages = Math.max(1, Math.ceil(regularPosts.length / POSTS_PER_PAGE));
     const pagedRegularPosts = regularPosts.slice((currentPage - 1) * POSTS_PER_PAGE, currentPage * POSTS_PER_PAGE);
