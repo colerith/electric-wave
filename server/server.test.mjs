@@ -34,6 +34,8 @@ test('authentication, publication, conflicts, uploads and persistence', async ()
     assert.equal((await fetch(base + url)).headers.get('content-type'), 'image/png');
     assert.equal((await fetch(base + '/api/uploads', { method: 'POST', headers: { Origin: options.origin, 'X-EW-Request': '1', Cookie: cookie, 'Content-Type': 'image/svg+xml' }, body: '<svg/>' })).status, 400);
     assert.equal((await fetch(base + '/.env')).status, 404);
+    await stop(); server = createApp(options); base = await start();
+    assert.equal((await (await call('/session', 'GET', undefined, cookie)).json()).authenticated, true);
     await call('/logout', 'POST', {}, cookie);
     assert.equal((await call('/content', 'PUT', original, cookie)).status, 401);
     await stop(); server = createApp(options); base = await start();

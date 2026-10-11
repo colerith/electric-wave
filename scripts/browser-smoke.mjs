@@ -20,6 +20,8 @@ try {
   await page.getByPlaceholder('输入管理密钥...').fill('browser-test-password');
   await page.getByRole('button', { name: '授权登录', exact: true }).click();
 
+  await page.getByRole('button', { name: '发布', exact: true }).waitFor();
+  await page.reload();
   await page.getByRole('button', { name: '发布', exact: true }).click();
   await page.getByPlaceholder('输入标题...').fill('Browser publication test');
   await page.getByPlaceholder('# 在此输入内容 (支持 Markdown)...').fill('Published from the existing editor.');

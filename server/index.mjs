@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
-import { randomBytes, scryptSync, timingSafeEqual, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, scryptSync, timingSafeEqual, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +24,9 @@ export function createApp(options = {}) {
   const seed = { posts: INITIAL_POSTS, categories: DEFAULT_CATEGORIES, announcements: INITIAL_ANNOUNCEMENTS, links: INITIAL_LINKS, siteConfig: DEFAULT_SITE_CONFIG, dailyWaveConfig: JSON.parse(readFileSync(resolve(root, 'public/daily-wave-config.json'), 'utf8')), editedTimeMap: {} };
   db.prepare('INSERT OR IGNORE INTO content VALUES (1, 1, ?)').run(JSON.stringify(seed));
   restoreArticles(db, dataDir, resolve(root, 'server/recovery/articles-2026-10-11.json'));
-  const sessions = new Map(), attempts = new Map();
+  db.exec('CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)');
+  const sessionKey = token => createHmac('sha256', password).update(token || '').digest('hex');
+  const attempts = new Map();
   const read = () => { const row = db.prepare('SELECT * FROM content WHERE id=1').get(); return { revision: row.revision, content: JSON.parse(row.body) }; };
   const one = createOneService(db, options.oneOptions);
   const refreshOne = () => { if (read().content.dailyWaveConfig.source === 'one') void one.get(); };
@@ -39,9 +41,9 @@ export function createApp(options = {}) {
       const path = new URL(req.url, 'http://localhost').pathname;
       const token = /(?:^|;\s*)ew_session=([^;]+)/.exec(req.headers.cookie || '')?.[1];
       const now = Date.now();
-      for (const [key, expiry] of sessions) if (expiry < now) sessions.delete(key);
+      db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now);
       for (const [key, entry] of attempts) if (entry.until < now) attempts.delete(key);
-      const authenticated = sessions.has(token);
+      const authenticated = !!token && !!db.prepare('SELECT 1 FROM sessions WHERE token_hash = ?').get(sessionKey(token));
       const body = async (limit = 12 * 1024 * 1024) => {
         const chunks = []; let size = 0;
         for await (const chunk of req) { size += chunk.length; if (size > limit) fail(413, '文件或内容超过大小限制'); chunks.push(chunk); }
@@ -66,10 +68,10 @@ export function createApp(options = {}) {
         const input = await parse(4096);
         if (typeof input.password !== 'string' || !timingSafeEqual(scryptSync(input.password, salt, 64), passwordHash)) fail(401, '密码错误');
         attempts.delete(ip);
-        const session = randomBytes(32).toString('hex'); sessions.set(session, now + 43_200_000);
+        const session = randomBytes(32).toString('hex'); db.prepare('INSERT INTO sessions VALUES (?, ?)').run(sessionKey(session), now + 43_200_000);
         res.setHeader('Set-Cookie', cookie(session, 43200)); return json(200, { authenticated: true });
       }
-      if (path === '/api/logout' && req.method === 'POST') { sessions.delete(token); res.setHeader('Set-Cookie', cookie('', 0)); return json(200, { ok: true }); }
+      if (path === '/api/logout' && req.method === 'POST') { db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sessionKey(token)); res.setHeader('Set-Cookie', cookie('', 0)); return json(200, { ok: true }); }
       if (path === '/api/content' && req.method === 'PUT') {
         const input = await parse(); validateContent(input.content);
         db.exec('BEGIN IMMEDIATE');
