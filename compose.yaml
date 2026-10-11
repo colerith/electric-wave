@@ -1,0 +1,16 @@
+services:
+  electric-wave:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${HOST_PORT:-3088}:3000"
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+    volumes:
+      - ./data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

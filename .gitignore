@@ -24,3 +24,11 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Persistent server content
+data/
+backups/
+deployment-packages/
+compose.override.yaml
+.deploy-*
+.deploy.lock

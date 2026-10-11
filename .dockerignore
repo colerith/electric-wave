@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.env
+.env.*
+data
+backups
+*.zip
+*.tsbuildinfo
+deployment-packages
+compose.override.yaml
+.deploy-*
+.deploy.lock
+.github

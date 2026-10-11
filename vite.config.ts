@@ -26,6 +26,7 @@ function getGitHubPagesBasePath() {
 
 export default defineConfig({
   plugins: [react()],
+  server: { proxy: { '/api': 'http://127.0.0.1:3000', '/uploads': 'http://127.0.0.1:3000' } },
   // GitHub Pages repo sites need a repo-prefixed base path, while local and custom-domain deploys stay at root.
   base: getGitHubPagesBasePath(),
   define: {

@@ -300,12 +300,12 @@ export const EditorModal: React.FC<EditorModalProps> = ({
                         placeholder="https://... 或点击上传"
                         className="flex-1 p-3 bg-white dark:bg-slate-800 dark:text-white border border-gray-200 dark:border-gray-700 outline-none focus:border-zine-blue text-sm truncate"
                      />
-                     <Button type="button" variant="secondary" onClick={() => triggerUpload('cover')} disabled={isUploadingImage} className="!px-3" title="上传到 GitHub">
+                     <Button type="button" variant="secondary" onClick={() => triggerUpload('cover')} disabled={isUploadingImage} className="!px-3" title="上传到服务器">
                          {isUploadingImage ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                          <span className="hidden sm:inline ml-1">{isUploadingImage ? '上传中' : '上传'}</span>
                      </Button>
                   </div>
-                  <p className="text-[10px] text-gray-400">本地图片会先上传到你配置的 GitHub 仓库，再写入图片链接。</p>
+                  <p className="text-[10px] text-gray-400">图片会上传到服务器，支持 PNG、JPEG、GIF、WebP，最大 10MB。</p>
                  
                  {formData.coverImage && (
                      <div className="aspect-video w-full rounded overflow-hidden bg-gray-100 dark:bg-slate-900 border border-gray-200 dark:border-gray-700">

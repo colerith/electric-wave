@@ -1,4 +1,5 @@
 
+import { api, uploadImage } from './services/api';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { HashRouter, Routes, Route, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
@@ -10,10 +11,6 @@ import { Post, INITIAL_POSTS, INITIAL_LINKS, FriendlyLink, EditorState, ViewMode
 import { GalleryCard } from './components/GalleryCard';
 import { Button } from './components/Button';
 import { EditorModal } from './components/EditorModal';
-
-// --- Security Helper ---
-// SHA-256 hash for 'fishy0517home'. 
-const ADMIN_HASH = "72d5ca73780ebff2deba2ce5899c86a5582514b9e56760e36ef56a68219a5171";
 
 // Storage Keys
 const KEYS = {
@@ -81,72 +78,6 @@ interface DataBundle {
   siteConfig: SiteConfig;
 }
 
-interface VersionSnapshot extends DataBundle {
-  hash: string;
-  savedAt: number;
-  source: 'published' | 'local' | 'history';
-}
-
-interface VersionChoice {
-  id: string;
-  title: string;
-  description: string;
-  snapshot: VersionSnapshot;
-}
-
-// 轻量字符串哈希（避免引入额外依赖）
-const hashString = (input: string) => {
-  let hash = 5381;
-  for (let i = 0; i < input.length; i++) {
-    hash = ((hash << 5) + hash) + input.charCodeAt(i);
-    hash = hash & hash;
-  }
-  return `h${(hash >>> 0).toString(16)}`;
-};
-
-const createSnapshot = (
-  bundle: DataBundle,
-  source: VersionSnapshot['source'],
-  savedAt = Date.now()
-): VersionSnapshot => {
-  const hash = hashString(JSON.stringify(bundle));
-  return { ...bundle, hash, source, savedAt };
-};
-
-const applyBundleToStorage = (bundle: DataBundle) => {
-  localStorage.setItem(KEYS.POSTS, JSON.stringify(bundle.posts));
-  localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(bundle.categories));
-  localStorage.setItem(KEYS.ANNOUNCEMENTS, JSON.stringify(bundle.announcements));
-  localStorage.setItem(KEYS.LINKS, JSON.stringify(bundle.links));
-  localStorage.setItem(KEYS.CONFIG, JSON.stringify(bundle.siteConfig));
-};
-
-const formatVersionTime = (timestamp: number) => new Date(timestamp).toLocaleString();
-
-interface GitHubConfig {
-  username: string;
-  repo: string;
-  branch: string;
-  filePath: string;
-  dailyWaveConfigPath: string;
-  assetPath: string;
-  token: string;
-  autoSync: boolean;
-  syncInterval: number; // minutes
-}
-
-const DEFAULT_GITHUB_CONFIG: GitHubConfig = {
-  username: '',
-  repo: '',
-  branch: 'main',
-  filePath: 'src/types.ts',
-  dailyWaveConfigPath: 'public/daily-wave-config.json',
-  assetPath: 'public/uploads',
-  token: '',
-  autoSync: false,
-  syncInterval: 30
-};
-
 interface DailyWaveEntry {
   id: string;
   date?: string;
@@ -162,7 +93,6 @@ interface DailyWaveConfig {
   items: DailyWaveEntry[];
 }
 
-const DAILY_WAVE_CONFIG_URL = '/daily-wave-config.json';
 const BUSUANZI_SCRIPT_BASE = 'https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js';
 
 const DEFAULT_DAILY_WAVE_CONFIG: DailyWaveConfig = {
@@ -379,134 +309,6 @@ const getWaveBadgeDisplayText = (badge: string) => {
   return badge;
 };
 
-const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  const chunkSize = 0x8000;
-
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-
-  return btoa(binary);
-};
-
-const sanitizeFileName = (name: string) => {
-  const dotIndex = name.lastIndexOf('.');
-  const base = (dotIndex >= 0 ? name.slice(0, dotIndex) : name)
-    .toLowerCase()
-    .replace(/[^a-z0-9-_]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '') || 'image';
-  const ext = dotIndex >= 0 ? name.slice(dotIndex).toLowerCase().replace(/[^a-z0-9.]/g, '') : '';
-  return `${base}${ext}`;
-};
-
-const trimSlashes = (value: string) => value.replace(/^\/+|\/+$/g, '');
-
-async function digestMessage(message: string) {
-  const msgUint8 = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-}
-
-// Helper to load from storage or fallback to default
-function loadState<T>(key: string, fallback: T): T {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : fallback;
-  } catch (e) {
-    console.warn(`Failed to load ${key} from storage`, e);
-    return fallback;
-  }
-}
-
-// Generate the content string for types.ts
-const generateTypesFileContent = (
-    posts: Post[], 
-    categories: string[], 
-    announcements: Announcement[], 
-    links: FriendlyLink[], 
-    siteConfig: SiteConfig,
-    previousGeneratedAt?: string
-) => {
-    const bundleForHash = { posts, categories, announcements, links, siteConfig };
-    const versionHash = hashString(JSON.stringify(bundleForHash));
-    const generatedAt = previousGeneratedAt || new Date().toISOString();
-
-    return `
-export interface Post {
-  id: string;
-  title: string;
-  excerpt: string;
-  content: string; // Now supports Markdown
-  tags: string[];
-  coverImage: string;
-  createdAt: number;
-  author: string;
-  category: string; // Dynamic category
-  isPinned?: boolean;
-}
-
-export interface FriendlyLink {
-  id: string;
-  title: string;
-  url: string;
-}
-
-export interface Announcement {
-    id: string;
-    content: string;
-    isActive: boolean;
-}
-
-export interface SiteConfig {
-    siteName: string;
-    avatarUrl: string;
-    startDate: string; // Format: YYYY-MM-DD
-}
-
-export const DATA_VERSION = {
-  hash: '${versionHash}',
-  generatedAt: '${generatedAt}'
-} as const;
-
-export type ViewMode = 'gallery' | 'list';
-
-export interface EditorState {
-  isOpen: boolean;
-  mode: 'create' | 'edit';
-  currentPost: Post | null;
-}
-
-export const DEFAULT_CATEGORIES = ${JSON.stringify(categories, null, 2)};
-
-export const DEFAULT_SITE_CONFIG: SiteConfig = ${JSON.stringify(siteConfig, null, 2)};
-
-export const INITIAL_POSTS: Post[] = ${JSON.stringify(posts, null, 2)};
-
-export const INITIAL_LINKS: FriendlyLink[] = ${JSON.stringify(links, null, 2)};
-
-export const INITIAL_ANNOUNCEMENTS: Announcement[] = ${JSON.stringify(announcements, null, 2)};
-`;
-};
-
-const DATA_VERSION_HASH_RE = /hash:\s*'([^']+)'/;
-const DATA_VERSION_GENERATED_AT_RE = /generatedAt:\s*'([^']+)'/;
-
-const extractDataVersionMetadata = (content: string) => {
-  const hashMatch = content.match(DATA_VERSION_HASH_RE);
-  const generatedAtMatch = content.match(DATA_VERSION_GENERATED_AT_RE);
-
-  return {
-    hash: hashMatch?.[1] || null,
-    generatedAt: generatedAtMatch?.[1] || null,
-  };
-};
-
 // Helper to preserve multiple blank lines while respecting code blocks
 const preprocessContent = (content: string) => {
   if (!content) return '';
@@ -515,7 +317,7 @@ const preprocessContent = (content: string) => {
   return parts.map(part => {
     // If it starts with ``` it's a code block, return as is
     if (part.startsWith('```')) return part;
-    
+
     // Otherwise replace sequences of 3+ newlines with empty paragraphs
     return part.replace(/\n{3,}/g, (match) => {
       const count = match.length;
@@ -547,7 +349,7 @@ const ECGVisualizer: React.FC = () => {
 
   // === 配置区域 ===
   // 扫描速度
-  const SPEED = 4; 
+  const SPEED = 4;
   // 线条透明度配置 (0.0 - 1.0)
   const OPACITY_CONFIG = {
     dark: 0.5,   // 暗色模式下的线条不透明度
@@ -563,7 +365,7 @@ const ECGVisualizer: React.FC = () => {
 
     let animationFrameId: number;
     let x = 0;
-    
+
     // Resize handler
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -590,12 +392,12 @@ const ECGVisualizer: React.FC = () => {
 
        // Theme update check (inefficient to do every frame but robust for toggle)
        const isDark = document.documentElement.classList.contains('dark');
-       
+
        // Dynamic Style based on config
        const opacity = isDark ? OPACITY_CONFIG.dark : OPACITY_CONFIG.light;
        ctx.strokeStyle = isDark ? `rgba(96, 165, 250, ${opacity})` : `rgba(27, 60, 115, ${opacity})`;
        ctx.shadowColor = isDark ? `rgba(96, 165, 250, ${opacity * 0.5})` : `rgba(27, 60, 115, ${opacity * 0.5})`;
-       
+
        ctx.lineWidth = 2;
        ctx.lineJoin = 'round';
        ctx.lineCap = 'round';
@@ -608,7 +410,7 @@ const ECGVisualizer: React.FC = () => {
        ctx.moveTo(x, prevY);
 
        x += SPEED;
-       
+
        // Loop x
        if (x > w) {
            x = 0;
@@ -649,16 +451,16 @@ const ECGVisualizer: React.FC = () => {
            y = baseline + 15;
            state = 'wait_t';
        } else if (state === 'wait_t') {
-           y = baseline; 
+           y = baseline;
            stateStep += 0.2;
            if (stateStep >= 1) { state = 't'; stateStep = 0; }
        } else if (state === 't') {
            // T wave: medium bump
            y = baseline - Math.sin(stateStep * Math.PI) * 15;
            stateStep += 0.1;
-           if (stateStep >= 1) { 
-               state = 'flat'; 
-               stateStep = 0; 
+           if (stateStep >= 1) {
+               state = 'flat';
+               stateStep = 0;
                y = baseline;
                nextBeatDistance = Math.random() * 400 + 100; // Reset timer
            }
@@ -703,82 +505,18 @@ const LoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: (key
         <div className="w-16 h-16 bg-zine-blue text-white rounded-full flex items-center justify-center mb-6 shadow-lg"><Github size={32} /></div>
         <h2 className="text-xl font-serif font-bold text-zine-blue dark:text-white mb-2">管理权认证</h2>
         <div className="w-full space-y-4">
-          <input 
-            type="password" 
-            value={key} 
-            onChange={(e) => setKey(e.target.value)} 
-            placeholder="输入管理密钥..." 
-            className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-900 border border-gray-100 dark:border-gray-700 rounded-xl outline-none text-center dark:text-white" 
-            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} 
+          <input
+            type="password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder="输入管理密钥..."
+            className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-900 border border-gray-100 dark:border-gray-700 rounded-xl outline-none text-center dark:text-white"
+            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
           />
           <Button onClick={handleSubmit} className="w-full !py-3 !rounded-xl" disabled={isLoading}>
             {isLoading ? '验证中...' : '授权登录'}
           </Button>
           <button onClick={onClose} className="w-full text-xs text-gray-400 py-2">取消访问</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const VersionConflictModal: React.FC<{
-  isOpen: boolean;
-  choices: VersionChoice[];
-  onConfirm: (choice: VersionChoice) => void;
-}> = ({ isOpen, choices, onConfirm }) => {
-  const [selectedId, setSelectedId] = useState('');
-
-  useEffect(() => {
-    if (!isOpen || choices.length === 0) return;
-    setSelectedId(choices[0].id);
-  }, [isOpen, choices]);
-
-  if (!isOpen) return null;
-
-  const selected = choices.find(c => c.id === selectedId) || choices[0];
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-slate-800 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden border border-gray-100 dark:border-gray-700">
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-          <h3 className="text-lg font-bold font-serif text-zine-blue dark:text-white flex items-center gap-2">
-            <AlertCircle size={18} className="text-zine-pink" />
-            检测到多版本数据，请选择要采用的版本
-          </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">你当前设备存在未同步数据，同时线上也有新更新。请选择要保留的版本。</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
-          <div className="max-h-[360px] overflow-y-auto border-r border-gray-100 dark:border-gray-700">
-            {choices.map(choice => (
-              <button
-                key={choice.id}
-                onClick={() => setSelectedId(choice.id)}
-                className={`w-full text-left px-4 py-4 border-b border-gray-100 dark:border-gray-700 transition-colors ${selectedId === choice.id ? 'bg-zine-blue/5 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700/40'}`}
-              >
-                <div className="font-bold text-sm text-zine-blue dark:text-gray-100">{choice.title}</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{choice.description}</div>
-              </button>
-            ))}
-          </div>
-
-          <div className="p-4 space-y-3">
-            <h4 className="font-bold text-sm text-zine-blue dark:text-gray-100">版本对比</h4>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-gray-50 dark:bg-slate-700/40 rounded-lg p-3">文章数：<span className="font-bold">{selected.snapshot.posts.length}</span></div>
-              <div className="bg-gray-50 dark:bg-slate-700/40 rounded-lg p-3">分区数：<span className="font-bold">{selected.snapshot.categories.length}</span></div>
-              <div className="bg-gray-50 dark:bg-slate-700/40 rounded-lg p-3">公告数：<span className="font-bold">{selected.snapshot.announcements.length}</span></div>
-              <div className="bg-gray-50 dark:bg-slate-700/40 rounded-lg p-3">友链数：<span className="font-bold">{selected.snapshot.links.length}</span></div>
-            </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              站点名：<span className="font-bold text-zine-blue dark:text-gray-100">{selected.snapshot.siteConfig.siteName}</span>
-            </div>
-            <div className="text-xs text-gray-400 font-mono break-all">Hash: {selected.snapshot.hash}</div>
-
-            <Button className="w-full mt-2" onClick={() => onConfirm(selected)}>
-              采用该版本
-            </Button>
-          </div>
         </div>
       </div>
     </div>
@@ -913,7 +651,7 @@ const Header: React.FC<{ isAdmin: boolean; isDark: boolean; themeMode: ThemeMode
           >
             {isDark ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          
+
           <a href="https://github.com/Colerith/electric-wave" target="_blank" rel="noopener noreferrer" className="opacity-60 hover:opacity-100 transition-opacity text-zine-blue dark:text-white p-1">
             <Github size={20} strokeWidth={1.5} />
           </a>
@@ -1024,33 +762,28 @@ const AnnouncementGallery: React.FC<{ announcements: Announcement[] }> = ({ anno
 
 // --- Dashboard Component (Enhanced) ---
 
-const Dashboard: React.FC<{ 
-    posts: Post[]; 
-    categories: string[]; 
-    announcements: Announcement[]; 
+const Dashboard: React.FC<{
+    posts: Post[];
+    categories: string[];
+    announcements: Announcement[];
     links: FriendlyLink[];
     siteConfig: SiteConfig;
   dailyWaveConfig: DailyWaveConfig;
   onUpdateDailyWaveConfig: (config: DailyWaveConfig) => void;
-    onUpdatePosts: (posts: Post[]) => void; 
-    onUpdateCategories: (cats: string[]) => void; 
-    onUpdateAnnouncements: (anns: Announcement[]) => void; 
+    onUpdatePosts: (posts: Post[]) => void;
+    onUpdateCategories: (cats: string[]) => void;
+    onUpdateAnnouncements: (anns: Announcement[]) => void;
     onUpdateLinks: (links: FriendlyLink[]) => void;
     onUpdateSiteConfig: (config: SiteConfig) => void;
-    onEditPost: (p: Post) => void; 
-    onDeletePost: (id: string) => void; 
+    onEditPost: (p: Post) => void;
+    onDeletePost: (id: string) => void;
 }> = ({ posts, categories, announcements, links, siteConfig, dailyWaveConfig, onUpdateDailyWaveConfig, onUpdatePosts, onUpdateCategories, onUpdateAnnouncements, onUpdateLinks, onUpdateSiteConfig, onEditPost, onDeletePost }) => {
   const [activeTab, setActiveTab] = useState<'posts' | 'announcements' | 'categories' | 'links' | 'daily-wave' | 'settings'>('posts');
     const [newCategory, setNewCategory] = useState('');
     const [newLink, setNewLink] = useState({ title: '', url: '' });
     const [newAnnouncement, setNewAnnouncement] = useState('');
   const [selectedWaveId, setSelectedWaveId] = useState('');
-    
-    // GitHub Sync State
-    const [ghConfig, setGhConfig] = useState<GitHubConfig>(() => loadState(KEYS.GITHUB_CONFIG, DEFAULT_GITHUB_CONFIG));
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [isSyncingDailyWave, setIsSyncingDailyWave] = useState(false);
-    const [syncStatus, setSyncStatus] = useState<{success: boolean, message: string, time: string} | null>(null);
+
     const [draggingPostId, setDraggingPostId] = useState<string | null>(null);
 
     const orderedPosts = useMemo(() => {
@@ -1070,156 +803,6 @@ const Dashboard: React.FC<{
         setSelectedWaveId(dailyWaveConfig.items[0].id);
       }
     }, [dailyWaveConfig.items, selectedWaveId]);
-
-    // Save GitHub config whenever it changes
-    useEffect(() => {
-        localStorage.setItem(KEYS.GITHUB_CONFIG, JSON.stringify(ghConfig));
-    }, [ghConfig]);
-
-    // Auto-sync logic
-    useEffect(() => {
-        if (!ghConfig.autoSync || ghConfig.syncInterval <= 0 || !ghConfig.token || !ghConfig.username || !ghConfig.repo) return;
-
-        const intervalId = setInterval(() => {
-            handleGitHubSync(true);
-        }, ghConfig.syncInterval * 60 * 1000);
-
-        return () => clearInterval(intervalId);
-    }, [ghConfig, posts, categories, announcements, links, siteConfig]);
-
-    const handleExportTs = () => {
-        const typesFileContent = generateTypesFileContent(posts, categories, announcements, links, siteConfig);
-        const blob = new Blob([typesFileContent], { type: 'text/typescript' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `types.ts`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
-
-      const getGitHubTextFile = async (path: string) => {
-        const apiUrl = `https://api.github.com/repos/${ghConfig.username}/${ghConfig.repo}/contents/${path}`;
-
-        const getRes = await fetch(`${apiUrl}?ref=${ghConfig.branch}`, {
-          headers: {
-            'Authorization': `token ${ghConfig.token}`,
-            'Accept': 'application/vnd.github.v3+json'
-          }
-        });
-
-        let sha = '';
-        let existingContent = '';
-        if (getRes.ok) {
-          const data = await getRes.json();
-          sha = data.sha;
-          if (data.content) {
-            existingContent = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
-          }
-        } else if (getRes.status !== 404) {
-          throw new Error(`Failed to fetch file: ${getRes.statusText}`);
-        }
-
-        return { sha, content: existingContent };
-      };
-
-      const putTextFileToGitHub = async (path: string, content: string, message: string) => {
-        const apiUrl = `https://api.github.com/repos/${ghConfig.username}/${ghConfig.repo}/contents/${path}`;
-        const { sha, content: existingContent } = await getGitHubTextFile(path);
-
-        if (existingContent === content) {
-          return { skipped: true as const };
-        }
-
-        const base64Content = btoa(unescape(encodeURIComponent(content)));
-        const putRes = await fetch(apiUrl, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `token ${ghConfig.token}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            message,
-            content: base64Content,
-            branch: ghConfig.branch,
-            sha: sha || undefined
-          })
-        });
-
-        if (!putRes.ok) {
-          const errData = await putRes.json();
-          throw new Error(errData.message || 'Update failed');
-        }
-
-        return { skipped: false as const };
-      };
-
-    const handleGitHubSync = async (isAuto = false) => {
-        if (!ghConfig.username || !ghConfig.repo || !ghConfig.token) {
-            setSyncStatus({ success: false, message: '请完善 GitHub 配置', time: new Date().toLocaleTimeString() });
-            return;
-        }
-
-        setIsSyncing(true);
-        try {
-            const existingFile = await getGitHubTextFile(ghConfig.filePath);
-            const nextMetadata = extractDataVersionMetadata(
-              generateTypesFileContent(posts, categories, announcements, links, siteConfig)
-            );
-            const currentMetadata = extractDataVersionMetadata(existingFile.content);
-
-            const content = generateTypesFileContent(
-              posts,
-              categories,
-              announcements,
-              links,
-              siteConfig,
-              currentMetadata.hash === nextMetadata.hash ? currentMetadata.generatedAt || undefined : undefined
-            );
-
-            const result = await putTextFileToGitHub(
-              ghConfig.filePath,
-              content,
-              isAuto ? 'Auto-sync: Update data' : 'Manual sync: Update data via Dashboard'
-            );
-
-            setSyncStatus({
-              success: true,
-              message: result.skipped ? '内容无变化，已跳过 GitHub 同步' : 'GitHub 同步成功',
-              time: new Date().toLocaleTimeString()
-            });
-        } catch (error: any) {
-            setSyncStatus({ success: false, message: `同步失败: ${error.message}`, time: new Date().toLocaleTimeString() });
-            if (!isAuto) alert(`GitHub Sync Failed: ${error.message}`);
-        } finally {
-            setIsSyncing(false);
-        }
-    };
-
-    const handleSyncDailyWaveConfig = async () => {
-      if (!ghConfig.username || !ghConfig.repo || !ghConfig.token) {
-        setSyncStatus({ success: false, message: '请完善 GitHub 配置', time: new Date().toLocaleTimeString() });
-        return;
-      }
-
-      setIsSyncingDailyWave(true);
-      try {
-        await putTextFileToGitHub(
-          ghConfig.dailyWaveConfigPath,
-          JSON.stringify(dailyWaveConfig, null, 2),
-          'Manual sync: Update daily wave config via Dashboard'
-        );
-        setSyncStatus({ success: true, message: '每日电波配置已推送到 GitHub', time: new Date().toLocaleTimeString() });
-      } catch (error: any) {
-        setSyncStatus({ success: false, message: `推送失败: ${error.message}`, time: new Date().toLocaleTimeString() });
-        alert(`Daily Wave Sync Failed: ${error.message}`);
-      } finally {
-        setIsSyncingDailyWave(false);
-      }
-    };
 
     const updateDailyWave = (updater: (prev: DailyWaveConfig) => DailyWaveConfig) => {
       const next = updater(dailyWaveConfig);
@@ -1469,7 +1052,7 @@ const Dashboard: React.FC<{
                           <div className="flex flex-wrap items-center gap-3 justify-between border-b border-gray-200 dark:border-gray-600 pb-3">
                             <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white">每日电波编辑器</h3>
                             <div className="flex items-center gap-2">
-                              <Button onClick={handleSyncDailyWaveConfig} variant="secondary" disabled={isSyncingDailyWave} icon={isSyncingDailyWave ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>}>{isSyncingDailyWave ? '推送中...' : '推送配置到 GitHub'}</Button>
+
                             </div>
                           </div>
 
@@ -1531,153 +1114,35 @@ const Dashboard: React.FC<{
                                 <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white border-b border-gray-200 dark:border-gray-600 pb-2">基础信息</h3>
                                 <div>
                                     <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-2 uppercase tracking-wider">站点名称</label>
-                                    <input 
-                                        value={siteConfig.siteName} 
-                                        onChange={e => onUpdateSiteConfig({...siteConfig, siteName: e.target.value})} 
-                                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-base font-serif text-zine-blue dark:text-white shadow-sm" 
+                                    <input
+                                        value={siteConfig.siteName}
+                                        onChange={e => onUpdateSiteConfig({...siteConfig, siteName: e.target.value})}
+                                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-base font-serif text-zine-blue dark:text-white shadow-sm"
                                     />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-2 uppercase tracking-wider">头像链接</label>
                                     <div className="flex gap-4">
                                         <img src={siteConfig.avatarUrl} alt="Preview" className="w-12 h-12 rounded-full border border-gray-200 object-cover" />
-                                        <input 
-                                            value={siteConfig.avatarUrl} 
-                                            onChange={e => onUpdateSiteConfig({...siteConfig, avatarUrl: e.target.value})} 
-                                            className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 dark:text-gray-300 shadow-sm" 
+                                        <input
+                                            value={siteConfig.avatarUrl}
+                                            onChange={e => onUpdateSiteConfig({...siteConfig, avatarUrl: e.target.value})}
+                                            className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 dark:text-gray-300 shadow-sm"
                                         />
                                     </div>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-bold text-zine-blue dark:text-blue-300 mb-2 uppercase tracking-wider">建站日期</label>
-                                    <input 
+                                    <input
                                         type="date"
-                                        value={siteConfig.startDate} 
-                                        onChange={e => onUpdateSiteConfig({...siteConfig, startDate: e.target.value})} 
-                                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 dark:text-gray-300 shadow-sm" 
+                                        value={siteConfig.startDate}
+                                        onChange={e => onUpdateSiteConfig({...siteConfig, startDate: e.target.value})}
+                                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:border-zine-blue text-sm font-mono text-gray-500 dark:text-gray-300 shadow-sm"
                                     />
                                 </div>
                             </div>
 
-                            {/* GitHub Sync */}
-                            <div className="bg-gray-50 dark:bg-slate-700/30 p-8 rounded-xl border border-gray-100 dark:border-gray-700 space-y-8">
-                                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-600 pb-2">
-                                     <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white flex items-center gap-2">
-                                         <Github size={18}/> GitHub 数据同步
-                                     </h3>
-                                     {syncStatus && (
-                                         <span className={`text-xs flex items-center gap-1 ${syncStatus.success ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
-                                             {syncStatus.success ? <CheckCircle2 size={12}/> : <AlertCircle size={12}/>} 
-                                             {syncStatus.time}
-                                         </span>
-                                     )}
-                                </div>
-                                
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-400 mb-1">用户名 (Owner)</label>
-                                        <input 
-                                            value={ghConfig.username}
-                                            onChange={e => setGhConfig({...ghConfig, username: e.target.value})}
-                                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white"
-                                            placeholder="e.g. Colerith"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-400 mb-1">仓库名 (Repo)</label>
-                                        <input 
-                                            value={ghConfig.repo}
-                                            onChange={e => setGhConfig({...ghConfig, repo: e.target.value})}
-                                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white"
-                                            placeholder="e.g. electric-wave"
-                                        />
-                                    </div>
-                                </div>
 
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-400 mb-1">Personal Access Token (PAT)</label>
-                                    <input 
-                                        type="password"
-                                        value={ghConfig.token}
-                                        onChange={e => setGhConfig({...ghConfig, token: e.target.value})}
-                                        className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
-                                        placeholder="github_pat_..."
-                                    />
-                                    <p className="mt-1 text-[10px] text-gray-400">Token 需要 Repo 读写权限。仅保存在本地浏览器中。</p>
-                                </div>
-                                
-                                <div className="grid grid-cols-2 gap-4">
-                                     <div>
-                                        <label className="block text-xs font-bold text-gray-400 mb-1">分支 (Branch)</label>
-                                        <input 
-                                            value={ghConfig.branch}
-                                            onChange={e => setGhConfig({...ghConfig, branch: e.target.value})}
-                                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
-                                        />
-                                    </div>
-                                     <div>
-                                        <label className="block text-xs font-bold text-gray-400 mb-1">文件路径</label>
-                                        <input 
-                                            value={ghConfig.filePath}
-                                            onChange={e => setGhConfig({...ghConfig, filePath: e.target.value})}
-                                            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
-                                        />
-                                     </div>
-                                 </div>
-
-                                 <div>
-                                     <label className="block text-xs font-bold text-gray-400 mb-1">图片上传路径</label>
-                                     <input 
-                                         value={ghConfig.assetPath}
-                                         onChange={e => setGhConfig({...ghConfig, assetPath: e.target.value})}
-                                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
-                                         placeholder="public/uploads"
-                                     />
-                                     <p className="mt-1 text-[10px] text-gray-400">上传后将生成 GitHub Raw 图片地址，不再把图片存进本地存储。</p>
-                                 </div>
-
-                                   <div>
-                                     <label className="block text-xs font-bold text-gray-400 mb-1">每日电波配置路径</label>
-                                     <input 
-                                       value={ghConfig.dailyWaveConfigPath}
-                                       onChange={e => setGhConfig({...ghConfig, dailyWaveConfigPath: e.target.value})}
-                                       className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded outline-none text-sm dark:text-white font-mono"
-                                       placeholder="public/daily-wave-config.json"
-                                     />
-                                   </div>
-
-                                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg flex items-center justify-between">
-                                     <div className="flex items-center gap-2">
-                                         <Clock size={16} className="text-zine-blue dark:text-blue-300"/>
-                                         <label className="text-sm font-bold text-zine-blue dark:text-blue-300">定时自动同步</label>
-                                     </div>
-                                     <div className="flex items-center gap-2">
-                                         <input 
-                                             type="number" 
-                                             min="5" 
-                                             value={ghConfig.syncInterval} 
-                                             onChange={e => setGhConfig({...ghConfig, syncInterval: parseInt(e.target.value) || 30})}
-                                             className="w-16 px-2 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded text-center text-sm dark:text-white"
-                                         />
-                                         <span className="text-xs text-gray-500">分钟</span>
-                                         <button 
-                                            onClick={() => setGhConfig({...ghConfig, autoSync: !ghConfig.autoSync})}
-                                            className={`w-10 h-6 rounded-full relative transition-colors ${ghConfig.autoSync ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                                         >
-                                             <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${ghConfig.autoSync ? 'translate-x-4' : ''}`}></span>
-                                         </button>
-                                     </div>
-                                </div>
-
-                                <div className="flex gap-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                                    <Button onClick={() => handleGitHubSync(false)} disabled={isSyncing} className="flex-1" icon={isSyncing ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>}> 
-                                        {isSyncing ? '同步中...' : '立即同步到 GitHub'}
-                                    </Button>
-                                    <Button onClick={handleExportTs} variant="secondary" className="px-4" title="手动下载备份">
-                                        <Download size={18}/>
-                                    </Button>
-                                </div>
-                            </div>
 
                         </div>
                     )}
@@ -1697,9 +1162,9 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
   const navigate = useNavigate();
   const post = posts.find(p => String(p.id) === String(id));
   const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
-  
+
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
-  
+
   if (!post) {
     return (
       <div className="p-20 text-center font-serif">
@@ -1718,7 +1183,7 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
     const id = slugify(text);
     return <Tag id={id}>{children}</Tag>;
   };
-  
+
   // Revised Strategy: Since we can't easily sync indices between TOC parser (RegEx) and ReactMarkdown renderer,
   // we will use pure text slugs. If duplicate headings exist, they collide. Acceptable for simple blog.
   const components = {
@@ -1735,7 +1200,7 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
      // Updated regex to catch up to h4
      const headings = content.match(/^(#{1,4})\s+(.*)$/gm);
      if (!headings || headings.length === 0) return null;
-     
+
      return (
         <div className="w-full lg:w-64 shrink-0">
           <div className="sticky top-32">
@@ -1745,19 +1210,19 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
                 const level = heading.match(/^#+/)?.[0].length || 1;
                 const text = heading.replace(/^#+\s+/, '');
                 const id = slugify(text);
-                
+
                 // Visual hierarchy based on level
                 const fontSize = level === 1 ? 'text-sm font-bold' : level === 2 ? 'text-sm' : 'text-xs';
                 const color = level === 1 ? 'text-zine-blue dark:text-gray-200' : 'text-gray-500 dark:text-gray-400';
                 // Indentation logic (rem)
                 const paddingLeft = `${(level - 1) * 1}rem`;
-                
+
                 return (
                   <li key={index} className="relative group transition-all" style={{ paddingLeft }}>
                     <button onClick={() => {
                         const el = document.getElementById(id);
-                        if(el) { 
-                          const y = el.getBoundingClientRect().top + window.scrollY - 100; 
+                        if(el) {
+                          const y = el.getBoundingClientRect().top + window.scrollY - 100;
                           window.scrollTo({top:y, behavior:'smooth'});
                           if (onItemClick) onItemClick();
                         }
@@ -1778,13 +1243,13 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
         {/* Header Area */}
         {hasCover ? (
              <div className="relative h-[60vh] w-full overflow-hidden group">
-                <img 
-                    src={post.coverImage} 
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
-                    alt={post.title} 
+                <img
+                    src={post.coverImage}
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                    alt={post.title}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
-                
+
                 <div className="absolute bottom-0 left-0 w-full z-30 p-6 md:p-12 max-w-7xl mx-auto flex flex-col items-start gap-4">
                     <button onClick={() => navigate(-1)} className="p-2 bg-white/10 backdrop-blur-md rounded-full text-white mb-2 hover:bg-white hover:text-zine-blue transition-colors group">
                         <ChevronLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
@@ -1819,7 +1284,7 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
                  </div>
             </div>
         )}
-        
+
         <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
             <div className="lg:col-span-3 hidden lg:block"><SimpleTableOfContents content={post.content} /></div>
             <div className="lg:col-span-8 lg:col-start-4">
@@ -1830,7 +1295,7 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
         </div>
 
         {/* Mobile TOC Trigger Button */}
-        <button 
+        <button
            onClick={() => setIsMobileTocOpen(true)}
            className="lg:hidden fixed bottom-24 right-10 z-30 p-3 bg-white dark:bg-slate-700 text-zine-blue dark:text-white border border-gray-200 dark:border-gray-600 shadow-soft rounded-full transition-all duration-300 hover:scale-110 active:scale-95"
            title="目录"
@@ -1843,7 +1308,7 @@ const PostDetail: React.FC<{ posts: Post[]; isAdmin: boolean; onEdit: (p: Post) 
            <>
              {/* Backdrop */}
              <div className="fixed inset-0 bg-black/40 z-[60] backdrop-blur-sm lg:hidden animate-in fade-in duration-300" onClick={() => setIsMobileTocOpen(false)} />
-             
+
              {/* Drawer */}
              <div className="fixed top-0 right-0 bottom-0 w-3/4 max-w-sm bg-white dark:bg-slate-900 z-[70] shadow-2xl p-6 lg:hidden animate-in slide-in-from-right duration-300 overflow-y-auto border-l border-gray-100 dark:border-gray-800">
                 <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100 dark:border-gray-700">
@@ -1940,7 +1405,7 @@ const HomeWithNavigation: React.FC<{
     return (
         <main className="w-full max-w-7xl mx-auto px-6 py-12 lg:py-20 flex-1 relative z-10">
             <section className="mb-24 flex flex-col justify-between md:flex-row md:items-end md:justify-between border-b border-zine-blue/10 dark:border-gray-700 pb-16 md:relative min-h-[400px]">
-                
+
                 {/* ECG Visualizer: In-flow on mobile with smaller height, absolute on desktop */}
                 <div className="w-full h-[120px] -z-10 overflow-hidden pointer-events-none opacity-40 md:absolute md:-top-20 md:left-1/2 md:-translate-x-1/2 md:w-screen md:h-[150px] md:opacity-35">
                     <ECGVisualizer />
@@ -1992,14 +1457,14 @@ const HomeWithNavigation: React.FC<{
                         —— {dailyWave?.from || '电波FM'}
                     </p>
                 </div>
-                
+
                 {/* Post Count: Hidden on mobile */}
                 <div className="text-right shrink-0 hidden md:block">
                     <div className="text-6xl font-serif font-light text-zine-blue/20 dark:text-white/10">{posts.length}</div>
                     <div className="text-xs text-gray-400">已收录条目</div>
                 </div>
             </section>
-            
+
             <AnnouncementGallery announcements={announcements} />
 
             {/* Sticky Category Filter */}
@@ -2047,14 +1512,14 @@ const HomeWithNavigation: React.FC<{
 
                  <div className="w-full overflow-x-auto pb-1">
                   <div className="inline-flex items-center gap-2 min-w-full pr-1">
-                    <button 
+                    <button
                       onClick={() => setSearchQuery('')}
                       className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${!searchQuery ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
                     >
                       全部
                     </button>
                     {categories.map(cat => (
-                      <button 
+                      <button
                         key={cat}
                         onClick={() => setSearchQuery(cat)}
                         className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${searchQuery === cat ? 'bg-zine-blue text-white shadow-soft dark:shadow-none' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:text-zine-blue dark:hover:text-white border border-gray-100 dark:border-gray-700'}`}
@@ -2100,9 +1565,9 @@ const HomeWithNavigation: React.FC<{
                     <>
                     <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-8">
                         {pagedRegularPosts.map(post => (
-                            <GalleryCard 
-                                key={post.id} 
-                                post={post} 
+                            <GalleryCard
+                                key={post.id}
+                                post={post}
                                 isAdmin={isAdmin}
                                 onClick={() => navigate(`/post/${post.id}`)}
                                 onEdit={(e) => { e.stopPropagation(); handleEditPost(post); }}
@@ -2130,15 +1595,15 @@ const HomeWithNavigation: React.FC<{
 };
 
 export const App: React.FC = () => {
-  const [posts, setPosts] = useState<Post[]>(() => loadState(KEYS.POSTS, INITIAL_POSTS));
-  const [categories, setCategories] = useState<string[]>(() => loadState(KEYS.CATEGORIES, DEFAULT_CATEGORIES));
-  const [announcements, setAnnouncements] = useState<Announcement[]>(() => loadState(KEYS.ANNOUNCEMENTS, INITIAL_ANNOUNCEMENTS));
-  const [links, setLinks] = useState<FriendlyLink[]>(() => loadState(KEYS.LINKS, INITIAL_LINKS));
-  const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => loadState(KEYS.CONFIG, DEFAULT_SITE_CONFIG));
-  
-  const [isAdmin, setIsAdmin] = useState(() => loadState(KEYS.ADMIN, false));
+  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
+  const [announcements, setAnnouncements] = useState<Announcement[]>(INITIAL_ANNOUNCEMENTS);
+  const [links, setLinks] = useState<FriendlyLink[]>(INITIAL_LINKS);
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
+
+  const [isAdmin, setIsAdmin] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readThemeMode());
-  
+
   // 默认自动模式：按时间切换；手动模式：使用用户选择
   const [isDark, setIsDark] = useState(() => {
     const initialMode = readThemeMode();
@@ -2148,22 +1613,17 @@ export const App: React.FC = () => {
     }
     return getAutoThemeByTime();
   });
-  
+
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
-  const [dailyWaveConfig, setDailyWaveConfig] = useState<DailyWaveConfig>(() => {
-    const saved = loadState<DailyWaveConfig | null>(KEYS.DAILY_WAVE_CONFIG, null);
-    return parseDailyWaveConfig(saved) || DEFAULT_DAILY_WAVE_CONFIG;
-  });
+  const [dailyWaveConfig, setDailyWaveConfig] = useState<DailyWaveConfig>(DEFAULT_DAILY_WAVE_CONFIG);
   const [dailyWaveConfigText, setDailyWaveConfigText] = useState(() => JSON.stringify(dailyWaveConfig, null, 2));
   const [todayWave, setTodayWave] = useState<DailyWaveEntry | null>(null);
   const [todayBadges, setTodayBadges] = useState<string[]>([]);
-  const [editedTimeMap, setEditedTimeMap] = useState<Record<string, number>>(() => loadState(KEYS.EDITED_TIME_MAP, {}));
-  const [versionChoices, setVersionChoices] = useState<VersionChoice[]>([]);
+  const [editedTimeMap, setEditedTimeMap] = useState<Record<string, number>>({});
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
-  const hasReconciledRef = useRef(false);
 
   const applyDailyWaveConfig = (config: DailyWaveConfig, source: 'local' | 'remote' = 'local') => {
     setDailyWaveConfig(config);
@@ -2183,7 +1643,7 @@ export const App: React.FC = () => {
         return;
       }
       applyDailyWaveConfig(validated, 'local');
-      setSyncNotice('每日电波配置已保存并生效。');
+
     } catch (error) {
       alert(`JSON 解析失败: ${(error as Error).message}`);
     }
@@ -2244,149 +1704,61 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const uploadImageToGitHub = async (file: File) => {
-    const ghConfig = loadState<GitHubConfig>(KEYS.GITHUB_CONFIG, DEFAULT_GITHUB_CONFIG);
-    if (!ghConfig.username || !ghConfig.repo || !ghConfig.token) {
-      throw new Error('请先在设置中完善 GitHub 用户名、仓库名和 Token。');
-    }
-
-    const assetBasePath = trimSlashes(ghConfig.assetPath || 'public/uploads');
-    const datePrefix = new Date().toISOString().slice(0, 10).replace(/-/g, '/');
-    const safeName = sanitizeFileName(file.name || 'image');
-    const uniqueName = `${Date.now()}-${safeName}`;
-    const uploadPath = `${assetBasePath}/${datePrefix}/${uniqueName}`;
-    const apiUrl = `https://api.github.com/repos/${ghConfig.username}/${ghConfig.repo}/contents/${uploadPath}`;
-    const content = arrayBufferToBase64(await file.arrayBuffer());
-
-    const putRes = await fetch(apiUrl, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `token ${ghConfig.token}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: `Upload image: ${uniqueName}`,
-        content,
-        branch: ghConfig.branch
-      })
-    });
-
-    if (!putRes.ok) {
-      const errData = await putRes.json().catch(() => null);
-      throw new Error(errData?.message || '图片上传失败');
-    }
-
-    const publicPath = trimSlashes(uploadPath.replace(/^public\//, ''));
-    return `https://raw.githubusercontent.com/${ghConfig.username}/${ghConfig.repo}/${ghConfig.branch}/${publicPath}`;
-  };
-
-  const publishedSnapshot = useMemo(() => createSnapshot({
-    posts: INITIAL_POSTS,
-    categories: DEFAULT_CATEGORIES,
-    announcements: INITIAL_ANNOUNCEMENTS,
-    links: INITIAL_LINKS,
-    siteConfig: DEFAULT_SITE_CONFIG
-  }, 'published'), []);
-
-  const applySnapshotToState = (snapshot: VersionSnapshot) => {
-    setPosts(snapshot.posts);
-    setCategories(snapshot.categories);
-    setAnnouncements(snapshot.announcements);
-    setLinks(snapshot.links);
-    setSiteConfig(snapshot.siteConfig);
-    applyBundleToStorage(snapshot);
-  };
-
-  const buildCurrentLocalSnapshot = () => createSnapshot({
-    posts,
-    categories,
-    announcements,
-    links,
-    siteConfig
-  }, 'local');
-
+  const [revision, setRevision] = useState(0);
+  const [baseline, setBaseline] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveBlocked, setSaveBlocked] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
+  const currentContent = { posts, categories, announcements, links, siteConfig, dailyWaveConfig, editedTimeMap };
+  const serialized = JSON.stringify(currentContent);
+  const dirty = revision > 0 && baseline !== serialized;
   useEffect(() => {
-    if (hasReconciledRef.current) return;
-
-    const localSnapshot = buildCurrentLocalSnapshot();
-    const lastSeenPublishedHash = localStorage.getItem(KEYS.LAST_SEEN_PUBLISHED_HASH);
-
-    // 首次运行：记录当前发布版本基线
-    if (!lastSeenPublishedHash) {
-      localStorage.setItem(KEYS.LAST_SEEN_PUBLISHED_HASH, publishedSnapshot.hash);
-      hasReconciledRef.current = true;
-      return;
-    }
-
-    // 线上发布版本未变化，不处理
-    if (lastSeenPublishedHash === publishedSnapshot.hash) {
-      hasReconciledRef.current = true;
-      return;
-    }
-
-    // 本地等于旧发布版本 => 自动升级到新发布版本（解决“另一个设备还是旧缓存”）
-    if (localSnapshot.hash === lastSeenPublishedHash) {
-      applySnapshotToState(publishedSnapshot);
-      localStorage.setItem(KEYS.LAST_SEEN_PUBLISHED_HASH, publishedSnapshot.hash);
-      setSyncNotice('检测到新发布版本，已自动更新到最新内容。');
-      hasReconciledRef.current = true;
-      return;
-    }
-
-    // 本地已是新发布版本，只更新基线即可
-    if (localSnapshot.hash === publishedSnapshot.hash) {
-      localStorage.setItem(KEYS.LAST_SEEN_PUBLISHED_HASH, publishedSnapshot.hash);
-      hasReconciledRef.current = true;
-      return;
-    }
-
-    // 本地有未同步变更 + 线上也有更新 => 进入版本选择
-    const history = loadState<VersionSnapshot[]>(KEYS.DATA_HISTORY, []);
-    const dedup = new Map<string, VersionChoice>();
-
-    const pushChoice = (snapshot: VersionSnapshot, title: string, description: string) => {
-      if (dedup.has(snapshot.hash)) return;
-      dedup.set(snapshot.hash, { id: snapshot.hash, title, description, snapshot });
-    };
-
-    pushChoice(publishedSnapshot, '线上最新版本（推荐）', `发布时间：${formatVersionTime(publishedSnapshot.savedAt)}`);
-    pushChoice(localSnapshot, '当前设备本地版本', `本地时间：${formatVersionTime(localSnapshot.savedAt)}`);
-    history.slice(0, 6).forEach((item, idx) => {
-      pushChoice(
-        { ...item, source: 'history' },
-        `本地历史版本 #${idx + 1}`,
-        `保存时间：${formatVersionTime(item.savedAt)}`
-      );
-    });
-
-    setVersionChoices(Array.from(dedup.values()));
-    hasReconciledRef.current = true;
-  }, [publishedSnapshot]);
-
-  useEffect(() => localStorage.setItem(KEYS.POSTS, JSON.stringify(posts)), [posts]);
-  useEffect(() => localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(categories)), [categories]);
-  useEffect(() => localStorage.setItem(KEYS.ANNOUNCEMENTS, JSON.stringify(announcements)), [announcements]);
-  useEffect(() => localStorage.setItem(KEYS.LINKS, JSON.stringify(links)), [links]);
-  useEffect(() => localStorage.setItem(KEYS.CONFIG, JSON.stringify(siteConfig)), [siteConfig]);
-  useEffect(() => localStorage.setItem(KEYS.ADMIN, JSON.stringify(isAdmin)), [isAdmin]);
-  useEffect(() => localStorage.setItem(KEYS.EDITED_TIME_MAP, JSON.stringify(editedTimeMap)), [editedTimeMap]);
-
-  // 保存本地版本历史，支持出现冲突时“多版本比较并选择”
+    let active = true;
+    Promise.all([api('/content'), api('/session')]).then(([result, session]) => {
+      if (!active) return;
+      const c = result.content;
+      setPosts(c.posts); setCategories(c.categories); setAnnouncements(c.announcements);
+      setLinks(c.links); setSiteConfig(c.siteConfig); setDailyWaveConfig(c.dailyWaveConfig);
+      setDailyWaveConfigText(JSON.stringify(c.dailyWaveConfig, null, 2)); setEditedTimeMap(c.editedTimeMap);
+      setBaseline(JSON.stringify(c)); setRevision(result.revision); setIsAdmin(session.authenticated);
+      localStorage.removeItem(KEYS.GITHUB_CONFIG);
+    }).catch(error => { if (active) setLoadError(error.message); });
+    return () => { active = false; };
+  }, []);
   useEffect(() => {
-    if (!hasReconciledRef.current) return;
-    const snapshot = buildCurrentLocalSnapshot();
-    const history = loadState<VersionSnapshot[]>(KEYS.DATA_HISTORY, []);
-    if (history[0]?.hash === snapshot.hash) return;
+    const warn = (event: BeforeUnloadEvent) => { if (dirty && isAdmin) { event.preventDefault(); event.returnValue = ''; } };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty, isAdmin]);
+  const downloadDraft = () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(currentContent, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'electric-wave-draft.json'; a.click(); URL.revokeObjectURL(url);
+  };
+  useEffect(() => {
+    if (!isAdmin || !dirty || saveBlocked || savingRef.current) return;
+    const timer = window.setTimeout(async () => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      try {
+        const result = await api('/content', { method: 'PUT', body: JSON.stringify({ revision, content: JSON.parse(serialized) }) });
+        setRevision(result.revision); setBaseline(serialized); setSaveError('');
+      } catch (error) {
+        const status = (error as Error & { status?: number }).status;
+        setSaveError(status === 409 ? '其他设备已修改内容，自动保存已暂停。请下载本地备份，再刷新页面合并修改。' : '自动保存失败：' + (error as Error).message);
+        setSaveBlocked(true);
+      } finally { savingRef.current = false; }
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [isAdmin, dirty, serialized, revision, baseline, saveBlocked, retryTick]);
+  useEffect(() => {
+    if (!saveBlocked) return;
+    const retry = () => { setSaveBlocked(false); setRetryTick(t => t + 1); };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [saveBlocked]);
 
-    const nextHistory = [
-      { ...snapshot, savedAt: Date.now(), source: 'local' as const },
-      ...history.filter(item => item.hash !== snapshot.hash)
-    ].slice(0, 8);
-
-    localStorage.setItem(KEYS.DATA_HISTORY, JSON.stringify(nextHistory));
-  }, [posts, categories, announcements, links, siteConfig]);
-  
   // Theme Toggle Handler
   const toggleTheme = () => {
     const newMode = !isDark;
@@ -2422,33 +1794,6 @@ export const App: React.FC = () => {
     if (isDark) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   }, [isDark]);
-
-  useEffect(() => {
-    const loadRemoteDailyWave = async () => {
-      const saved = loadState<DailyWaveConfig | null>(KEYS.DAILY_WAVE_CONFIG, null);
-      const validatedSaved = parseDailyWaveConfig(saved);
-      if (validatedSaved) {
-        setDailyWaveConfig(validatedSaved);
-        setDailyWaveConfigText(JSON.stringify(validatedSaved, null, 2));
-      }
-
-      try {
-        const res = await fetch(`${DAILY_WAVE_CONFIG_URL}?t=${Date.now()}`);
-        if (!res.ok) return;
-        const json = await res.json();
-        const validated = parseDailyWaveConfig(json);
-        if (validated) {
-          setDailyWaveConfig(validated);
-          setDailyWaveConfigText(JSON.stringify(validated, null, 2));
-          localStorage.setItem(KEYS.DAILY_WAVE_CONFIG, JSON.stringify(validated));
-        }
-      } catch (_error) {
-        // Keep local config when remote fetch fails.
-      }
-    };
-
-    loadRemoteDailyWave();
-  }, []);
 
   useEffect(() => {
     const refreshDailyWave = () => {
@@ -2500,13 +1845,10 @@ export const App: React.FC = () => {
   }, [dailyWaveConfig]);
 
   const handleLogin = async (key: string) => {
-    const hash = await digestMessage(key);
-    if (hash === ADMIN_HASH) {
-      setIsAdmin(true);
-      setIsLoginOpen(false);
-    } else {
-      alert("密钥错误");
-    }
+    try {
+      await api('/login', { method: 'POST', body: JSON.stringify({ password: key }) });
+      setIsAdmin(true); setIsLoginOpen(false); setSaveBlocked(false); setRetryTick(t => t + 1);
+    } catch (error) { alert((error as Error).message); }
   };
 
   const handleSavePost = (post: Post) => {
@@ -2524,49 +1866,47 @@ export const App: React.FC = () => {
       setPosts(posts.filter(p => p.id !== id));
     }
   };
-  
+
   const handleEditPost = (post: Post) => {
       setEditor({ isOpen: true, mode: 'edit', currentPost: post });
   };
 
-  const filteredPosts = posts.filter(p => 
-    p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredPosts = posts.filter(p =>
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
     p.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  
+
   const allTags = Array.from(new Set(posts.flatMap(p => p.tags)));
 
-  const handleVersionChoiceConfirm = (choice: VersionChoice) => {
-    applySnapshotToState(choice.snapshot);
-    localStorage.setItem(KEYS.LAST_SEEN_PUBLISHED_HASH, publishedSnapshot.hash);
-    setVersionChoices([]);
-    setSyncNotice(`已采用：${choice.title}`);
-  };
-
+  if (!revision) return <div className="min-h-screen flex items-center justify-center p-8"><div>{loadError || '正在加载网站内容…'}{loadError && <button className="ml-4 underline" onClick={() => window.location.reload()}>重试</button>}</div></div>;
   return (
     <HashRouter>
         <div className={`min-h-screen flex flex-col transition-colors duration-500 bg-zine-paper dark:bg-dark-bg ${isDark ? 'dark' : ''}`}>
              <ScrollToTop />
-             <Header 
-                isAdmin={isAdmin} 
-                isDark={isDark} 
+             <Header
+                isAdmin={isAdmin}
+                isDark={isDark}
                themeMode={themeMode}
                onEnableAutoTheme={enableAutoTheme}
-                toggleTheme={toggleTheme} 
+                toggleTheme={toggleTheme}
                 onLoginClick={() => setIsLoginOpen(true)}
-                onLogout={() => setIsAdmin(false)}
+                onLogout={async () => {
+                  if (dirty) { alert('修改尚未保存完成，请稍候；若保存失败，请先处理页面底部提示。'); return; }
+                  try { await api('/logout', { method: 'POST' }); window.location.reload(); }
+                  catch (error) { alert((error as Error).message); }
+                }}
                 onNewPost={() => setEditor({ isOpen: true, mode: 'create', currentPost: null })}
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
                 siteConfig={siteConfig}
              />
-             
+
              <Routes>
               <Route path="/" element={
-                <HomeWithNavigation 
-                  posts={filteredPosts} 
-                  categories={categories} 
+                <HomeWithNavigation
+                  posts={filteredPosts}
+                  categories={categories}
                   searchQuery={searchQuery}
                   setSearchQuery={setSearchQuery}
                   editedTimeMap={editedTimeMap}
@@ -2582,17 +1922,17 @@ export const App: React.FC = () => {
                 <Route path="/post/:id" element={<PostDetail posts={posts} isAdmin={isAdmin} onEdit={handleEditPost} />} />
                 <Route path="/dashboard" element={
                     isAdmin ? (
-                        <Dashboard 
-                            posts={posts} 
-                            categories={categories} 
-                            announcements={announcements} 
-                            links={links} 
+                        <Dashboard
+                            posts={posts}
+                            categories={categories}
+                            announcements={announcements}
+                            links={links}
                             siteConfig={siteConfig}
                           dailyWaveConfig={dailyWaveConfig}
                           onUpdateDailyWaveConfig={applyDailyWaveConfig}
-                            onUpdatePosts={setPosts} 
-                            onUpdateCategories={setCategories} 
-                            onUpdateAnnouncements={setAnnouncements} 
+                            onUpdatePosts={setPosts}
+                            onUpdateCategories={setCategories}
+                            onUpdateAnnouncements={setAnnouncements}
                             onUpdateLinks={setLinks}
                             onUpdateSiteConfig={setSiteConfig}
                             onEditPost={handleEditPost}
@@ -2609,24 +1949,26 @@ export const App: React.FC = () => {
              <Footer links={links} isAdmin={isAdmin} visitorCount={0} siteConfig={siteConfig} />
 
              <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} onLogin={handleLogin} />
-             
-             <EditorModal 
-                isOpen={editor.isOpen} 
-                mode={editor.mode} 
-                initialData={editor.currentPost} 
+
+             <EditorModal
+                isOpen={editor.isOpen}
+                mode={editor.mode}
+                initialData={editor.currentPost}
                 categories={categories}
                 allTags={allTags}
-                onUploadImage={uploadImageToGitHub}
-                onClose={() => setEditor({ ...editor, isOpen: false })} 
-                onSave={handleSavePost} 
+                onUploadImage={uploadImage}
+                onClose={() => setEditor({ ...editor, isOpen: false })}
+                onSave={handleSavePost}
              />
 
-             <VersionConflictModal
-                isOpen={versionChoices.length > 0}
-                choices={versionChoices}
-                onConfirm={handleVersionChoiceConfirm}
-             />
-
+             {isAdmin && saveError && <div role="alert" className="fixed bottom-5 left-4 right-4 z-[120] mx-auto max-w-2xl rounded-xl bg-red-50 border border-red-200 text-red-900 p-4 shadow-lg text-sm">
+               <p>{saveError}</p>
+               <div className="flex flex-wrap gap-4 mt-2">
+                 <button onClick={() => { setSaveBlocked(false); setRetryTick(t => t + 1); }}>重试保存</button>
+                 <button onClick={downloadDraft}>下载本地备份</button>
+                 <button onClick={() => setIsLoginOpen(true)}>重新登录</button>
+               </div>
+             </div>}
              {syncNotice && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] bg-zine-blue text-white px-4 py-2 rounded-full shadow-lg text-sm animate-in fade-in duration-300">
                   {syncNotice}
