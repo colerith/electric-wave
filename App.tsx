@@ -1462,7 +1462,6 @@ const HomeWithNavigation: React.FC<{
                         ))}
                       </div>
                     )}
-                    {dailyWave?.imageUrl && <img key={dailyWave.imageUrl} src={dailyWave.imageUrl} alt="ONE 每日图文" loading="lazy" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = 'none'; }} className="w-full max-w-xl max-h-72 object-cover rounded-xl mb-4" />}
                     <div className="space-y-8 md:space-y-10 py-3">
                       {(waveParagraphs.length > 0 ? waveParagraphs : ['正在接收今天的电波...']).map((paragraph, index) => (
                         <p key={`${index}-${paragraph.slice(0, 16)}`} className="text-lg md:text-2xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue dark:from-white dark:via-blue-300 dark:to-white whitespace-pre-line leading-[1.95]">
@@ -1472,7 +1471,6 @@ const HomeWithNavigation: React.FC<{
                     </div>
                     <p className="text-lg text-gray-500 dark:text-gray-400 font-serif italic mt-2">
                         —— {dailyWave?.from || '电波FM'}
-                        {dailyWave?.sourceUrl && <a href={dailyWave.sourceUrl} target="_blank" rel="noopener noreferrer" className="ml-3 text-sm underline">ONE · 原文</a>}
                     </p>
                 </div>
 
