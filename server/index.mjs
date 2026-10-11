@@ -10,6 +10,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 import { validateContent } from '../services/content-validation.mjs';
 import { restoreArticles } from './restore-articles.mjs';
+import { createOneService } from './one.mjs';
 export function createApp(options = {}) {
   const dataDir = resolve(options.dataDir || process.env.DATA_DIR || resolve(root, 'data'));
   const password = options.password || process.env.ADMIN_PASSWORD;
@@ -25,6 +26,10 @@ export function createApp(options = {}) {
   restoreArticles(db, dataDir, resolve(root, 'server/recovery/articles-2026-10-11.json'));
   const sessions = new Map(), attempts = new Map();
   const read = () => { const row = db.prepare('SELECT * FROM content WHERE id=1').get(); return { revision: row.revision, content: JSON.parse(row.body) }; };
+  const one = createOneService(db, options.oneOptions);
+  const refreshOne = () => { if (read().content.dailyWaveConfig.source === 'one') void one.get(); };
+  const oneTimer = setInterval(refreshOne, 3_600_000);
+  oneTimer.unref();
   const cookie = (value, age) => `ew_session=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${secure ? '; Secure' : ''}`;
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -50,6 +55,8 @@ export function createApp(options = {}) {
       if (path === '/api/health' && req.method === 'GET') return json(200, { ok: true });
       if (path === '/api/session' && req.method === 'GET') return json(200, { authenticated });
       if (path === '/api/content' && req.method === 'GET') return json(200, read());
+      if (path === '/api/daily-wave' && req.method === 'GET') return json(200, read().content.dailyWaveConfig.source === 'one' ? await one.get() : { item: null });
+      if (path === '/api/daily-wave/refresh' && req.method === 'POST') return json(200, await one.get(true));
       if (path === '/api/login' && req.method === 'POST') {
         // Use the socket address, never an untrusted forwarding header. Behind a proxy this is a shared limit.
         const ip = req.socket.remoteAddress;
@@ -98,7 +105,7 @@ export function createApp(options = {}) {
       res.end(req.method === 'HEAD' ? undefined : readFileSync(file));
     } catch (e) { if (!e.status) console.error(e); json(e.status || 500, e.status ? { error: e.message } : { error: '服务器处理失败，请稍后重试' }); }
   });
-  server.on('close', () => db.close());
+  server.on('close', () => { clearInterval(oneTimer); db.close(); });
   return server;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

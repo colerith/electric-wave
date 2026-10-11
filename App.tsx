@@ -79,6 +79,8 @@ interface DataBundle {
 }
 
 interface DailyWaveEntry {
+  imageUrl?: string;
+  sourceUrl?: string;
   id: string;
   date?: string;
   title?: string;
@@ -88,6 +90,7 @@ interface DailyWaveEntry {
 }
 
 interface DailyWaveConfig {
+  source?: 'manual' | 'one';
   updatedAt?: string;
   timezone?: string;
   items: DailyWaveEntry[];
@@ -176,6 +179,7 @@ const parseDailyWaveConfig = (raw: unknown): DailyWaveConfig | null => {
   return {
     updatedAt: candidate.updatedAt,
     timezone: candidate.timezone,
+    source: candidate.source === 'one' ? 'one' : 'manual',
     items: cleanedItems
   };
 };
@@ -779,6 +783,8 @@ const Dashboard: React.FC<{
     onDeletePost: (id: string) => void;
 }> = ({ posts, categories, announcements, links, siteConfig, dailyWaveConfig, onUpdateDailyWaveConfig, onUpdatePosts, onUpdateCategories, onUpdateAnnouncements, onUpdateLinks, onUpdateSiteConfig, onEditPost, onDeletePost }) => {
   const [activeTab, setActiveTab] = useState<'posts' | 'announcements' | 'categories' | 'links' | 'daily-wave' | 'settings'>('posts');
+    const [oneLoading, setOneLoading] = useState(false);
+    const [oneNotice, setOneNotice] = useState('');
     const [newCategory, setNewCategory] = useState('');
     const [newLink, setNewLink] = useState({ title: '', url: '' });
     const [newAnnouncement, setNewAnnouncement] = useState('');
@@ -1051,6 +1057,16 @@ const Dashboard: React.FC<{
                         <div className="xl:col-span-2 bg-gray-50 dark:bg-slate-700/30 rounded-xl border border-gray-100 dark:border-gray-700 p-6 space-y-5">
                           <div className="flex flex-wrap items-center gap-3 justify-between border-b border-gray-200 dark:border-gray-600 pb-3">
                             <h3 className="font-serif font-bold text-lg text-zine-blue dark:text-white">每日电波编辑器</h3>
+                            <select aria-label="每日电波来源" value={dailyWaveConfig.source || 'manual'} onChange={e => updateDailyWave(prev => ({ ...prev, source: e.target.value as 'manual' | 'one' }))} className="rounded-lg border p-2 bg-white dark:bg-slate-800 dark:text-white">
+                              <option value="manual">手动电波</option><option value="one">ONE 自动电波（当天手动内容优先）</option>
+                            </select>
+                            {dailyWaveConfig.source === 'one' && <button disabled={oneLoading} onClick={async () => {
+                              setOneLoading(true); setOneNotice('');
+                              try { const result = await api('/daily-wave/refresh', { method: 'POST' }); setOneNotice(result.error || '已获取最新电波'); window.dispatchEvent(new Event('ew-one-refresh')); }
+                              catch (error) { setOneNotice((error as Error).message); }
+                              finally { setOneLoading(false); }
+                            }}>{oneLoading ? '获取中…' : '立即获取'}</button>}
+                            {oneNotice && <span className="text-sm text-gray-500">{oneNotice}</span>}
                             <div className="flex items-center gap-2">
 
                             </div>
@@ -1446,6 +1462,7 @@ const HomeWithNavigation: React.FC<{
                         ))}
                       </div>
                     )}
+                    {dailyWave?.imageUrl && <img key={dailyWave.imageUrl} src={dailyWave.imageUrl} alt="ONE 每日图文" loading="lazy" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = 'none'; }} className="w-full max-w-xl max-h-72 object-cover rounded-xl mb-4" />}
                     <div className="space-y-8 md:space-y-10 py-3">
                       {(waveParagraphs.length > 0 ? waveParagraphs : ['正在接收今天的电波...']).map((paragraph, index) => (
                         <p key={`${index}-${paragraph.slice(0, 16)}`} className="text-lg md:text-2xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-zine-blue via-zine-pink to-zine-blue dark:from-white dark:via-blue-300 dark:to-white whitespace-pre-line leading-[1.95]">
@@ -1455,6 +1472,7 @@ const HomeWithNavigation: React.FC<{
                     </div>
                     <p className="text-lg text-gray-500 dark:text-gray-400 font-serif italic mt-2">
                         —— {dailyWave?.from || '电波FM'}
+                        {dailyWave?.sourceUrl && <a href={dailyWave.sourceUrl} target="_blank" rel="noopener noreferrer" className="ml-3 text-sm underline">ONE · 原文</a>}
                     </p>
                 </div>
 
@@ -1620,6 +1638,7 @@ export const App: React.FC = () => {
   const [editor, setEditor] = useState<EditorState>({ isOpen: false, mode: 'create', currentPost: null });
   const [dailyWaveConfig, setDailyWaveConfig] = useState<DailyWaveConfig>(DEFAULT_DAILY_WAVE_CONFIG);
   const [dailyWaveConfigText, setDailyWaveConfigText] = useState(() => JSON.stringify(dailyWaveConfig, null, 2));
+  const [oneWave, setOneWave] = useState<DailyWaveEntry | null>(null);
   const [todayWave, setTodayWave] = useState<DailyWaveEntry | null>(null);
   const [todayBadges, setTodayBadges] = useState<string[]>([]);
   const [editedTimeMap, setEditedTimeMap] = useState<Record<string, number>>({});
@@ -1796,16 +1815,27 @@ export const App: React.FC = () => {
   }, [isDark]);
 
   useEffect(() => {
+    if (!revision || dailyWaveConfig.source !== 'one') { setOneWave(null); return; }
+    let active = true;
+    const load = async () => { try { const result = await api('/daily-wave'); if (active) setOneWave(result.item || null); } catch { /* Keep the last known wave; manual content is the fallback. */ } };
+    void load(); const timer = window.setInterval(load, 60_000);
+    window.addEventListener('ew-one-refresh', load);
+    return () => { active = false; clearInterval(timer); window.removeEventListener('ew-one-refresh', load); };
+  }, [revision, dailyWaveConfig.source]);
+
+  useEffect(() => {
     const refreshDailyWave = () => {
       const now = new Date();
-      setTodayWave(pickDailyWave(dailyWaveConfig, now));
+      const beijingDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+      const manualToday = dailyWaveConfig.items.find(item => item.date === beijingDate);
+      setTodayWave(dailyWaveConfig.source === 'one' ? manualToday || oneWave || pickDailyWave(dailyWaveConfig, now) : pickDailyWave(dailyWaveConfig, now));
       setTodayBadges(getTodayWaveBadges(now));
     };
 
     refreshDailyWave();
     const interval = setInterval(refreshDailyWave, 60 * 1000);
     return () => clearInterval(interval);
-  }, [dailyWaveConfig]);
+  }, [dailyWaveConfig, oneWave]);
 
   useEffect(() => {
     const api = {

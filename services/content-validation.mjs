@@ -7,6 +7,7 @@ export function validateContent(c) {
       !strings(c.categories) || !list('announcements', a => str(a, ['id','content']) && typeof a.isActive === 'boolean') ||
       !list('links', l => str(l, ['id','title','url'])) || !str(c.siteConfig, ['siteName','avatarUrl','startDate']) ||
       !Array.isArray(c.dailyWaveConfig?.items) || !c.dailyWaveConfig.items.length ||
+      ![undefined, 'manual', 'one'].includes(c.dailyWaveConfig.source) ||
       !c.dailyWaveConfig.items.every(w => str(w, ['id','content']) && ['date','title','from'].every(k => w[k] === undefined || typeof w[k] === 'string') && (w.tags === undefined || strings(w.tags))) ||
       !c.editedTimeMap || typeof c.editedTimeMap !== 'object' || Array.isArray(c.editedTimeMap) || !Object.values(c.editedTimeMap).every(Number.isFinite)) fail(400, '内容格式无效');
   return c;

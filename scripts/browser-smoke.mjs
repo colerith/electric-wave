@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const dataDir = mkdtempSync(join(tmpdir(), 'ew-browser-'));
 const origin = 'http://127.0.0.1:31889';
-const server = createApp({ dataDir, origin, password: 'browser-test-password' });
+const server = createApp({ dataDir, origin, password: 'browser-test-password', oneOptions: { fetcher: async () => ({ ok: true, json: async () => ({ res: 0, data: { content_list: [{ id: 'test', category: '0', forward: 'ONE browser integration quote', words_info: 'ONE test author' }] } }) }) } });
 await new Promise(r => server.listen(31889, '127.0.0.1', r));
 let browser;
 try {
@@ -57,6 +57,14 @@ try {
   const retried = page.waitForResponse(r => r.url().endsWith('/api/content') && r.request().method() === 'PUT' && r.status() === 200);
   await page.getByRole('button', { name: '重试保存', exact: true }).click(); await retried;
   assert.equal((await (await fetch(origin + '/api/content')).json()).content.siteConfig.siteName, 'Retry name');
+  await page.getByRole('button', { name: '每日电波', exact: true }).click();
+  const oneSaved = page.waitForResponse(r => r.url().endsWith('/api/content') && r.request().method() === 'PUT' && r.status() === 200);
+  await page.getByRole('combobox', { name: '每日电波来源' }).selectOption('one');
+  await oneSaved;
+  await visitor.reload();
+  await visitor.getByText('ONE browser integration quote', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '立即获取', exact: true }).click();
+  await page.getByText('已获取最新电波', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log('Browser smoke passed: login, existing editor, autosave, fresh visitor, mobile width.');
 } finally {
